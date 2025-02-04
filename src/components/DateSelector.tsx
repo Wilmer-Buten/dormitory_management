@@ -3,7 +3,7 @@ import { Calendar } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export const DateSelector: React.FC = () => {
-  const { selectedDate, setSelectedDate } = useStore();
+  const { selectedDate, setSelectedDate, enableFetchRoomsQuery, setEnableFetchRoomsQuery } = useStore();
 
   return (
     <div className="relative">
@@ -14,7 +14,9 @@ export const DateSelector: React.FC = () => {
       <input
         type="date"
         value={selectedDate}
-        onChange={(e) => setSelectedDate(e.target.value)}
+        onChange={(e) => {setSelectedDate(e.target.value)
+          !enableFetchRoomsQuery && setEnableFetchRoomsQuery(true);
+        }}
         className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
       />
     </div>

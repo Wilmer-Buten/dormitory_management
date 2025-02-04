@@ -13,7 +13,7 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite }) => {
   const getRoomStatus = (id: string) => {
     const room = suite.rooms.find(r => r.id === id);
     if (!room) return 'pending';
-    console.log(room)
+    console.log(suite)
     const allPresent = room.students.every(s => s.isPresent === 1 || s.isPresent === true);
     const allAbsent = room.students.every(s => s.isPresent === 0 || s.isPresent === false);
     const anyChecked = room.students.some(s => s.isPresent !== null);
@@ -42,7 +42,7 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite }) => {
       className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all cursor-pointer"
     >
       <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        Suite {suite.rooms[0].number}
+       {suite.rooms[0].building} - Suite {suite.rooms[0].suiteNumber}
       </h3>
       <div className="grid grid-cols-2 gap-4">
         {suite.rooms.map((room) => (

@@ -2,12 +2,14 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Suite } from '../types';
 import { useStore } from '../store/useStore';
+import Skeleton from './Skeleton';
 
 interface SuiteCardProps {
   suite: Suite;
+  isLoading?: boolean;
 }
 
-export const SuiteCard: React.FC<SuiteCardProps> = ({ suite }) => {
+export const SuiteCard: React.FC<SuiteCardProps> = ({ suite, isLoading }) => {
   const { setSelectedSuite } = useStore();
 
   const getRoomStatus = (id: string) => {
@@ -32,6 +34,35 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite }) => {
       default: return 'bg-gray-200';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-8 w-8 rounded-lg" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2].map((index) => (
+            <div key={index} className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <Skeleton className="h-5 w-1/3" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3">
+                <Skeleton className="h-4 w-4 rounded-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <motion.div

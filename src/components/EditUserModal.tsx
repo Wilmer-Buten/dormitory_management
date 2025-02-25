@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
-import { useStore } from '../store/useStore';
-import { User } from '../types';
+import React, { useState } from "react";
+import { X } from "lucide-react";
+import { useStore } from "../store/useStore";
+import { User } from "../types";
+import ModalComponent from "./ModalComponent";
 
 interface EditUserModalProps {
   user: User;
@@ -9,38 +10,62 @@ interface EditUserModalProps {
 }
 
 export function EditUserModal({ user, onClose }: EditUserModalProps) {
-  const { getTranslation, updateUser } = useStore();
+  const { getTranslation, updateUser, deleteUser } = useStore();
   const t = getTranslation();
   const [formData, setFormData] = useState({
     name: user.name,
     username: user.username,
     role: user.role,
     building: user.building,
-    building_id: user.building_id
+    building_id: user.building_id,
   });
-  const [error, setError] = useState('');
+  const [userDeletion, setUserDeletion] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    
+    setError("");
+
     try {
-        if (
-            user.name !== formData.name.trim() ||
-            user.username !== formData.username.trim() ||
-            user.role !== formData.role ||
-            user.building_id !== formData.building_id
-          ) {
-            await updateUser(user.id, formData);
-          }
+      if (
+        user.name !== formData.name.trim() ||
+        user.username !== formData.username.trim() ||
+        user.role !== formData.role ||
+        user.building_id !== formData.building_id
+      ) {
+        await updateUser(user.id, formData);
+      }
+
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al actualizar usuario');
+      setError(
+        err instanceof Error ? err.message : "Error al actualizar usuario"
+      );
+      console.log(err);
     }
   };
 
+  const handleUserDeletion = async () => {
+    window.scrollTo(0, 0);
+    onClose();
+    setUserDeletion(false);
+    await deleteUser(user.id);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <>
+       {userDeletion ? (
+        <ModalComponent
+          title={t.users.userDeletionModal.title}
+          description={t.users.userDeletionModal.description + " " + user.name + "?"}
+          handleConfirmButton={handleUserDeletion}
+          handleCancelButton={onClose}
+          confirmButtonText={t.common.delete}
+        />
+      ):
+    (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+   
       <div className="bg-white rounded-lg max-w-md w-full p-6 relative">
         <button
           onClick={onClose}
@@ -48,9 +73,9 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
         >
           <X size={24} />
         </button>
-        
+
         <h2 className="text-2xl font-bold mb-6">{t.users.editUser}</h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -59,12 +84,14 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t.users.email}
@@ -72,41 +99,51 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
             <input
               type="email"
               value={formData.username}
-              onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, username: e.target.value }))
+              }
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required  
+              required
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t.users.building}
             </label>
             <select
               value={formData.building_id}
-              onChange={(e) => setFormData(prev => ({ ...prev, building_id: Number(e.target.value) }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  building_id: Number(e.target.value),
+                }))
+              }
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {Object.entries(t.buildings).map(([key, name], i) => (
-                key !== 'all' && (
-                  <option key={i+1} value={i + 1}>
-                    {name}
-                  </option>
-                )
-              ))}
+              {Object.entries(t.buildings).map(
+                ([key, name], i) =>
+                  key !== "all" && (
+                    <option key={i + 1} value={i + 1}>
+                      {name}
+                    </option>
+                  )
+              )}
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t.users.role}
             </label>
             <select
               value={formData.role}
-              onChange={(e) =>   setFormData((prev) => ({
-                ...prev,
-                role: e.target.value as "admin" | "staff", // Asignar el tipo correcto
-              }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  role: e.target.value as "admin" | "staff", // Asignar el tipo correcto
+                }))
+              }
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="admin">{t.users.roles.admin}</option>
@@ -127,8 +164,18 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
               {t.common.cancel}
             </button>
             <button
+              type="button"
+              id="delete"
+              className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-700"
+              onClick={() => setUserDeletion(true)}
+            >
+              {t.common.delete}
+            </button>
+            <button
               type="submit"
+              id="save"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              onClick={handleSubmit}
             >
               {t.common.save}
             </button>
@@ -136,5 +183,8 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
         </form>
       </div>
     </div>
+    )}
+    </>
   );
+  
 }

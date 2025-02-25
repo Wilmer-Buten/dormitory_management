@@ -1,24 +1,27 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Check, X, Clock, Edit, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, X, Clock, Edit, Trash2, Eye } from "lucide-react";
 import { Room } from "../types";
 import { useStore } from "../store/useStore";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import ModalComponent from "./ModalComponent";
+import Skeleton from "./Skeleton";
+import { LoadingMorph } from "./LoadingMorph";
 
 interface RoomCardProps {
   room: Room;
+  isLoading: boolean;
 }
 
-export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
-  const updateStudentPresence = useStore(
-    (state) => state.updateStudentPresence
-  );
-  const { getTranslation, setIsLoading } = useStore();
+export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
+  const { currentUser, getTranslation, setIsLoading, addStudent, updateStudentPresence, deleteStudent } = useStore();
   const t = getTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudentName, setNewStudentName] = useState("");
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "";
@@ -34,11 +37,30 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
       roomId,
       studentId,
       isPresent,
+      inRoom
     }: {
       roomId: string;
       studentId: string;
-      isPresent: boolean;
-    }) => updateStudentPresence(roomId, studentId, isPresent),
+      isPresent: boolean | null;
+      inRoom: boolean | null;
+    }) => {
+      setIsUpdating(true);
+      return updateStudentPresence(roomId, studentId, isPresent, inRoom);
+    },
+    onSuccess: () => {
+      setTimeout(() => {
+        setIsUpdating(false);
+        setIsLoading(false);
+      }, 500); // Add a small delay before hiding the loading animation
+    },
+    onError: (error) => {
+      console.error("Error al actualizar estado:", error);
+      setIsUpdating(false);
+    },
+  });
+
+  const addStudentMutation = useMutation({
+    mutationFn: ({ roomId, studentName }: { roomId: string; studentName: string }) => addStudent(roomId, studentName),
     onSuccess: () => {
       setIsLoading(false);
     },
@@ -59,12 +81,22 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
     setIsFlipped(true);
   };
 
+  const deleteStudentMutation = useMutation({
+    mutationFn: ({ roomId, studentId }: { roomId: string; studentId: string }) => deleteStudent(studentId, roomId),
+    onSuccess: () => {
+      setIsLoading(false);
+    },
+    onError: (error) => {
+      console.error("Error deleting student:", error);
+    },
+  });
+
   const handleSaveNewStudent = () => {
     if (newStudentName.trim()) {
-      // Aquí debes añadir la lógica para guardar el nuevo estudiante
       console.log("Nuevo estudiante:", newStudentName);
       setIsAddingStudent(false);
       setNewStudentName("");
+      addStudentMutation.mutate({ roomId: room.id, studentName: newStudentName });
     }
   };
 
@@ -80,12 +112,55 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
   };
 
   const handleDelete = async (studentId: string) => {
-    // Aquí implementarías la lógica para eliminar el estudiante
     console.log("Deleting student:", studentId);
+    setStudentToDeleteId(studentId);
   };
+
+  const confirmDelete = () => {
+    if (studentToDeleteId) {
+      deleteStudentMutation.mutate({ roomId: room.id, studentId: studentToDeleteId });
+      setStudentToDeleteId(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setStudentToDeleteId(null);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-8 w-8 rounded-lg" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2].map((index) => (
+            <div key={index} className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <Skeleton className="h-5 w-1/3" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3">
+                <Skeleton className="h-4 w-4 rounded-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative" style={{ perspective: "1000px" }}>
+      <AnimatePresence>
+        {isUpdating && <LoadingMorph />}
+      </AnimatePresence>
       <motion.div
         initial={false}
         animate={{ rotateY: isFlipped ? 180 : 0 }}
@@ -119,63 +194,91 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
                 </motion.button>
               </div>
               <div className="space-y-4">
-                {(room.students[0].id === null || room.students.length === 0) ? (
+                {(room.students[0].id === null && room.students.length === 1) ? (
                   <div>{t.noStudents}</div>
                 ) : (
-                  room.students.map((student) => (
-                    <div key={student.id} className="flex flex-col space-y-2">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">{student.name}</span>
-                        <div className="flex gap-2">
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() =>
-                              mutation.mutate({
-                                roomId: room.id,
-                                studentId: student.id,
-                                isPresent: true,
-                              })
-                            }
-                            className={`p-2 rounded-lg ${
-                              student.isPresent === true ||
-                              student.isPresent === 1
-                                ? "bg-green-500 text-white"
-                                : "bg-gray-100 text-gray-500 hover:bg-green-100"
-                            }`}
-                          >
-                            <Check size={20} />
-                          </motion.button>
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() =>
-                              mutation.mutate({
-                                roomId: room.id,
-                                studentId: student.id,
-                                isPresent: false,
-                              })
-                            }
-                            className={`p-2 rounded-lg ${
-                              student.isPresent === false ||
-                              student.isPresent === 0
-                                ? "bg-red-500 text-white"
-                                : "bg-gray-100 text-gray-500 hover:bg-red-100"
-                            }`}
-                          >
-                            <X size={20} />
-                          </motion.button>
+                  room.students.map((student) => {
+                    if(student.id !== null) return (
+                      <div key={student.id} className="flex flex-col space-y-2">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                          <span className="text-gray-700">{student.name}</span>
+                          <div className="flex gap-2">
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() =>
+                                mutation.mutate({
+                                  roomId: room.id,
+                                  studentId: student.id,
+                                  isPresent: true,
+                                  inRoom: false
+                                })
+                              }
+                              className={`p-2 rounded-lg ${
+                                (student.isPresent === true ||
+                                  student.isPresent === 1) &&
+                                (student.inRoom === false ||
+                                  student.inRoom === 0 ||
+                                  student.inRoom === null)
+                                  ? "bg-green-500 text-white"
+                                  : "bg-gray-100 text-gray-500 hover:bg-green-100"
+                              }`}
+                            >
+                              <Check size={20} />
+                            </motion.button>
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() =>
+                                mutation.mutate({
+                                  roomId: room.id,
+                                  studentId: student.id,
+                                  isPresent: false,
+                                  inRoom: true
+                                })
+                              }
+                              className={`p-2 rounded-lg ${
+                                student.inRoom === true || student.inRoom === 1
+                                  ? "bg-yellow-500 text-white"
+                                  : "bg-gray-100 text-gray-500 hover:bg-red-100"
+                              }`}
+                            >
+                              <Eye size={20} />
+                            </motion.button>
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() =>
+                                mutation.mutate({
+                                  roomId: room.id,
+                                  studentId: student.id,
+                                  isPresent: false,
+                                  inRoom: false
+                                })
+                              }
+                              className={`p-2 rounded-lg ${
+                                (student.isPresent === false ||
+                                  student.isPresent === 0) &&
+                                (student.inRoom === false ||
+                                  student.inRoom === 0 ||
+                                  student.inRoom === null)
+                                  ? "bg-red-500 text-white"
+                                  : "bg-gray-100 text-gray-500 hover:bg-red-100"
+                              }`}
+                            >
+                              <X size={20} />
+                            </motion.button>
+                          </div>
                         </div>
+                        {student.lastCheckedBy && (
+                          <div className="flex items-center gap-2 text-sm text-gray-500 px-3">
+                            <Clock size={14} />
+                            <span>
+                              {t.verifiedBy} {currentUser?.name} ||{" "}
+                              {student.lastCheckedAt}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      {student.lastCheckedBy && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500 px-3">
-                          <Clock size={14} />
-                          <span>
-                            {t.verifiedBy} {student.lastCheckedBy} ||{" "}
-                            {formatDate(student.lastCheckedAt)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </>
@@ -207,24 +310,28 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
                   <X size={20} />
                 </motion.button>
               </div>
-              {(room.students[0].id === null || room.students.length === 0) ? (
-                  <div>{t.noStudents}</div>
-                ) : room.students.map((student) => (
-                <div key={student.id} className="flex flex-col space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                    <span className="text-gray-700">{student.name}</span>
-                    <div className="flex gap-2">
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDelete(student.id)}
-                        className="p-2 rounded-lg bg-red-100 text-red-500 hover:bg-red-200"
-                      >
-                        <Trash2 size={20} />
-                      </motion.button>
+              {(room.students[0].id === null && room.students.length === 1) ? (
+                <div>{t.noStudents}</div>
+              ) : (
+                room.students.map((student) => {
+                  if(student.id !== null) return (
+                    <div key={student.id} className="flex flex-col space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                        <span className="text-gray-700">{student.name}</span>
+                        <div className="flex gap-2">
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleDelete(student.id)}
+                            className="p-2 rounded-lg bg-red-100 text-red-500 hover:bg-red-200"
+                          >
+                            <Trash2 size={20} />
+                          </motion.button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  )
+                })
+              )}
               {isAddingStudent ? (
                 <div className="mt-4 p-4 bg-gray-100 rounded-lg shadow-lg">
                   <input
@@ -268,6 +375,17 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
             </>
           )}
         </div>
+        {studentToDeleteId && (
+          <AnimatePresence>
+            <ModalComponent
+              title={t.students.delete}
+              description={t.students.deleteConfirm}
+              handleConfirmButton={confirmDelete}
+              handleCancelButton={cancelDelete}
+              confirmButtonText={t.students.deleteConfirmButton}
+            />
+          </AnimatePresence>
+        )}
       </motion.div>
     </div>
   );

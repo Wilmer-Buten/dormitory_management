@@ -21,8 +21,10 @@ interface Store {
   currentSection: 'dashboard' | 'users' | 'settings' | 'import';
   enableFetchRoomsQuery: boolean;
   enableFetchUsersQuery: boolean;
+  selectedStat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending';
   err: string | null;
   theme: 'light' | 'dark';
+  setSelectedStat: (stat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending') => void;
   setTheme: (theme: 'light' | 'dark') => void;
   onPageChange: (page: number) => void
   setCurrentSection: (section: 'dashboard' | 'users' | 'settings' | 'import') => void;
@@ -33,7 +35,7 @@ interface Store {
   setSelectedSuite: (suiteId: string | null) => void;
   setSelectedBuilding: (building: string) => void;
   setLanguage: (lang: Language) => void;
-  updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0) => Promise<void>;
+  updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0 | null, inRoom: boolean | null) => Promise<void>;
   resetDailyChecks: () => Promise<void>;
   fetchRooms: () => Promise<void>;
   fetchUsers: () => Promise<void>;
@@ -44,23 +46,28 @@ interface Store {
   setError: (error: string) => void;
   fetchCurrentUser: () => Promise<void>;
   updateUser: (userId: number | undefined, userData: Partial<User>) => Promise<void>;
+  deleteUser: (userId: number | undefined) => Promise<void>;
   importStudents: (students: PreviewData) => Promise<void>;
   setIsLoading: (isLoading: boolean) => void; 
   setIsAuthenticated: (status: boolean) => void;
   setAccessToken: (accessToken: string) => void;
   getSuites: () => Suite[];
+  addStudent: (roomId: string, studentName: String) => Promise<void>;
   getStats: () => {
     totalRooms: number;
     presentCount: number;
     absentCount: number;
     pendingCount: number;
+    inRoomCount: number;
   };
+  getFilteredRooms: () => Room[];
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  deleteStudent: (studentId: string, roomId: string) => Promise<void>;
   getTranslation: () => typeof translations.en;
 }
 
-const API_URL = 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const useStore = create<Store>((set, get) => ({
   rooms: [],
@@ -82,15 +89,17 @@ export const useStore = create<Store>((set, get) => ({
   currentSection: 'dashboard',
   isAuthenticated: localStorage.getItem("isAuthenticated") === "true", 
   accessToken: '',
+  selectedStat: 'all',
   onPageChange: (page) => set({ currentPage: page }),
+  setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode }),
   setEnableFetchRoomsQuery: (enable) => set({ enableFetchRoomsQuery: enable }),
   setEnableFetchUsersQuery: (enable) => set({ enableFetchUsersQuery: enable }),
   setError: (err) => set({ err }),
   setSearchQuery: (query) => set({ searchQuery: query }),
-  setSelectedDate: (date) => {set({ selectedDate: date })},
+  setSelectedDate: (date) => {set({ selectedDate: date, selectedStat: 'all', searchQuery: '' })},
   setAccessToken: (accessToken) => set({ accessToken: accessToken }),
   setCurrentUser: (user) => set({ currentUser: user }),
-  setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null }),
+  setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '' }),
   setSelectedSuite: (suiteId) => set({ selectedSuite: suiteId }),
   setSelectedBuilding: (building) => set({ selectedBuilding: building, currentPage: 1 }),
   setLanguage: (lang) => set({ language: lang }),
@@ -104,15 +113,12 @@ export const useStore = create<Store>((set, get) => ({
       const response = await fetch(`${API_URL}/rooms${dateQueryParam}`);
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
-      console.log(data)
-      set({ isLoading: false });
      return data;
     } catch (error) {
       set({ err: (error as Error).message, isLoading: false });
       toast.error('Error loading rooms');
     }
   },
-
   login: async (email: string, password: string) => {
     try {
       const response = await fetch(`${API_URL}/login`, {
@@ -130,7 +136,6 @@ export const useStore = create<Store>((set, get) => ({
 
       const data = await response.json();
       localStorage.setItem('isAuthenticated', JSON.stringify(true));
-      console.log(data.user)
       set({
         currentUser: {
           id: data.user.id,
@@ -139,7 +144,8 @@ export const useStore = create<Store>((set, get) => ({
           role: data.user.role,
           building_id: data.user.building_id
         },
-        isAuthenticated: true
+        isAuthenticated: true,
+        accessToken: data.accessToken
       });
     } catch (error) {
       throw error;
@@ -163,6 +169,7 @@ export const useStore = create<Store>((set, get) => ({
           viewMode: 'rooms',
           selectedSuite: null,
           enableFetchRoomsQuery: true,
+          enableFetchUsersQuery: true,
           rooms: [],
           users: [],
           currentPage: 1
@@ -171,31 +178,75 @@ export const useStore = create<Store>((set, get) => ({
 
       } else {
         toast.error('Error logging out');
-        console.error('Error logging out');
       }
     } catch (error) {
       toast.error('Error logging out');
-      console.error('Logout failed:', error);
     }
     set({
       currentUser: null,
       isAuthenticated: false,
       currentSection: 'dashboard',
+      accessToken: '',
+      viewMode: 'rooms',
+      selectedSuite: null,
+      enableFetchRoomsQuery: true,
+      rooms: [],
+      users: [],
+      currentPage: 1
+    });
+  },
+  
+  getFilteredRooms: () => {
+    
+    const { rooms, selectedBuilding, searchQuery, selectedStat, selectedSuite } = get();
+
+    return rooms.filter((room) => {
+      // Suite filter
+      if (selectedSuite && room.suiteId !== selectedSuite) return false;
+      
+      // Building filter
+      if (selectedBuilding !== 'all' && room.building !== selectedBuilding) return false;
+      
+      // Search filter
+      if (searchQuery) {
+        const searchLower = searchQuery.toLowerCase();
+        const matchesSearch = room.building.toLowerCase().includes(searchLower) ||
+          room.students.some((student) => student.name?.toLowerCase().includes(searchLower));
+        if (!matchesSearch) return false;
+      }
+      
+      // Stats filter
+      if (selectedStat !== 'all') {
+
+        switch (selectedStat) {
+          case 'present':
+            return room.students.some(s => s.isPresent === true || s.isPresent === 1);
+          case 'inRoom':
+              return room.students.some(s => s.inRoom === true || s.inRoom === 1);
+          case 'absent':
+            return room.students.some(s => ((s.isPresent === false || s.isPresent === 0) && (s.inRoom === false || s.inRoom === 0)));
+          case 'pending':
+            return room.students.some(s => (s.isPresent === null && s.inRoom === null));
+        }
+      }
+      
+      return true;
     });
   },
 
   fetchUsers: async () => {
-    try {
-      const response = await fetch(`${API_URL}/users`);
-      if (!response.ok) throw new Error('Failed to fetch users');
-      const data = await response.json();
-      set({ users: [...get().users, ...data] });
-      return data;
-    } catch (error) {
-      toast.error('Error loading users');
+    
+    const response = await fetch(`${API_URL}/users`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch users');
     }
+    const data = await response.json();
+    set({ users: [...get().users, ...data], enableFetchUsersQuery: false });
+    return data; // Devuelve los datos correctamente
   },
+
   createUser: async (user) => {
+
     set({ isLoading: true});
     try {
       const response = await fetch(`${API_URL}/users/create`, {
@@ -208,18 +259,19 @@ export const useStore = create<Store>((set, get) => ({
 
       const data = await response.json();
       if (!response.ok) {
-        toast.error('Error creating user: ' + data.message);
-        throw new Error('Failed to create user');
+        toast.error('Error creating user');
+        throw new Error('Error creating user: ' + data.message);
       }
       set({ users: [...get().users, user], isLoading: false });
       toast.success('User created successfully');
       return data;
-    } catch (error) {
+    } catch (error: any) {
+      set({ isLoading: false });
+      toast.error(error.message);
       }
   },
 
   setRooms: (rooms) => {
-    console.log(rooms)
     set({ rooms: rooms, isLoading: false });
   },
 
@@ -235,7 +287,6 @@ export const useStore = create<Store>((set, get) => ({
   updateUser: async (userId: number | undefined, userData: Partial<User>) => {
     try {
       let user = {...userData, id: userId};
-      console.log(userId, userData)
       const response = await fetch(`${API_URL}/users/edit/${userId}`, {
         method: 'PUT',
         headers: {
@@ -249,7 +300,6 @@ export const useStore = create<Store>((set, get) => ({
         toast.error(updatedUser.message);
         throw new Error('Error al actualizar usuario');
       }
-      console.log(updatedUser)
       set({
         users: get().users.map((user) => {
           if (user.id === updatedUser.id) {
@@ -265,7 +315,67 @@ export const useStore = create<Store>((set, get) => ({
       throw error;
     }
   },
-  updateStudentPresence: async (roomId, studentId, isPresent) => {
+
+  deleteUser: async (userId: number | undefined) => {
+    set({ isLoading: true });
+    try {
+      const response = await fetch(`${API_URL}/users/delete/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${get().accessToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error(data.message);
+        throw new Error('Failed to delete user');
+      }
+
+      set((state) => ({
+        users: state.users.filter((user) => {
+          if (user.id === userId) {
+            return false;
+          }
+          return true;
+        })
+      }));
+      set({ isLoading: false });
+      toast.success('User deleted successfully');
+    } catch (error) {
+      set({ isLoading: false });
+      toast.error('Failed to delete user');
+    }
+  },
+
+  addStudent: async (roomId: string, studentName: String) => {
+    const currentUser = get().currentUser;
+    if (!currentUser) return;
+    set({ isLoading: true });
+    try {
+      const response = await fetch(`${API_URL}/students/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: studentName,
+          roomId,
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error('Failed to add student');
+
+      set((state) => ({
+        rooms: state.rooms.map((room ) => {
+          if (room.id === Number(roomId)) {
+            return { ...room, students: [...room.students, data.student]};
+          }
+          return room;
+        }),
+      }));
+      toast.success('Student added successfully');
+    } catch (error) {
+      toast.error('Failed to add student');
+    }
+  },
+
+  updateStudentPresence: async (roomId, studentId, isPresent, inRoom) => {
     const currentUser = get().currentUser;
     if (!currentUser) return;
     try {
@@ -275,11 +385,12 @@ export const useStore = create<Store>((set, get) => ({
         body: JSON.stringify({
           isPresent,
           lastCheckedBy: currentUser.name,
-          lastCheckedAt: new Date().toISOString()
+          lastCheckedAt: get().selectedDate,
+          inRoom
         })
       });
-      if (!response.ok) throw new Error('Failed to update student presence');
-
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
       set((state) => ({
         rooms: state.rooms.map((room) => {
           if (room.id === roomId) {
@@ -290,8 +401,9 @@ export const useStore = create<Store>((set, get) => ({
                   return { 
                     ...student, 
                     isPresent,
+                    inRoom,
                     lastCheckedBy: currentUser.username,
-                    lastCheckedAt: new Date().toISOString()
+                    lastCheckedAt: data.lastCheckedAt
                   };
                 }
                 return student;
@@ -301,10 +413,10 @@ export const useStore = create<Store>((set, get) => ({
           return room;
         }),
       }));
-
-      toast.success(isPresent ? 'Marked as present' : 'Marked as absent');
-    } catch (error) {
+      toast.success(isPresent ? 'Marked as present' : inRoom ? 'Marked as in room' : 'Marked as absent');
+    } catch (error: any) {
       toast.error('Failed to update status');
+      toast.error(error.message);
     }
   },
 
@@ -334,7 +446,6 @@ export const useStore = create<Store>((set, get) => ({
   getSuites: () => {
     const rooms = get().rooms;
     const selectedBuilding = get().selectedBuilding;
-    console.log(selectedBuilding)
     const filteredRooms = selectedBuilding === 'all' 
       ? rooms 
       : rooms.filter(room => room.building === selectedBuilding);
@@ -352,7 +463,30 @@ export const useStore = create<Store>((set, get) => ({
       rooms: rooms.sort((a, b) => a.letter.localeCompare(b.letter))
     }));
   },
-  
+
+  deleteStudent: async (studentId: string, roomId: string) => {
+    try {
+      set({ isLoading: true });
+      const response = await fetch(`${API_URL}/students/delete/${studentId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to delete student');
+
+      set((state) => ({
+        rooms: state.rooms.map((room) => {
+          if (room.id === roomId) {
+            return { ...room, students: room.students.filter((student) => student.id !== studentId) };
+          }
+          return room;
+        }),
+      }));
+
+      toast.success('Student deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete student');
+    }
+  },
   getStats: () => {
     const rooms = get().rooms;
     if(rooms.length === 0){
@@ -360,7 +494,8 @@ export const useStore = create<Store>((set, get) => ({
         totalRooms: 0,
         presentCount: 0,
         absentCount: 0,
-        pendingCount: 0
+        pendingCount: 0,
+        inRoomCount: 0
       };
     }
     const selectedBuilding = get().selectedBuilding;
@@ -370,11 +505,12 @@ export const useStore = create<Store>((set, get) => ({
     let presentCount = 0;
     let absentCount = 0;
     let pendingCount = 0;
-    
+    let inRoomCount = 0;
     filteredRooms.forEach((room) => {
       room.students.forEach((student) => {
         if (student.isPresent === true || student.isPresent === 1) presentCount++;
-        else if (student.isPresent === false || student.isPresent === 0) absentCount++;
+        else if ((student.isPresent === false || student.isPresent === 0) && (student.inRoom === false || student.inRoom === 0)) absentCount++;
+        else if (student.inRoom === true || student.inRoom === 1) inRoomCount++;
         else pendingCount++;
       });
     });
@@ -384,6 +520,7 @@ export const useStore = create<Store>((set, get) => ({
       presentCount,
       absentCount,
       pendingCount,
+      inRoomCount
     };
   },
 
@@ -395,7 +532,6 @@ export const useStore = create<Store>((set, get) => ({
   importStudents: async (students: PreviewData) => {
     set({ isLoading: true, err: null });
     try {
-      console.log(students.rows)
       const response = await fetch(`${API_URL}/students/import`, {
         method: 'POST',
         headers: {
@@ -404,12 +540,13 @@ export const useStore = create<Store>((set, get) => ({
         body: JSON.stringify(students.rows)
       });
       const data = await response.json();
-      toast.error(data.message);
-      if (!response.ok) throw new Error('Failed to import students');
-      set({ isLoading: false });
-      toast.success('Students imported successfully');
+      if (!response.ok) {
+        toast.error(data.message);
+        throw new Error('Failed to import students')
+      };
+      set({ isLoading: false, enableFetchRoomsQuery: true });
     } catch (error) {
-      console.error('Error importing students:', error);
+      toast.error('Error importing students');
     }
   },
 

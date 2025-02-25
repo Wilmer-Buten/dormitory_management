@@ -1,8 +1,9 @@
 import type React from "react"
 import { useState, useEffect } from "react"
-import { LayoutDashboard, Users, Settings, Menu, FileSpreadsheet, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, Users, Settings, Menu, FileSpreadsheet, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useStore } from "../store/useStore"
+import CopyrightText from "./CopyrightText"
 
 interface LayoutProps {
   children: React.ReactNode
@@ -140,6 +141,11 @@ export function Layout({ children }: LayoutProps) {
             ))
           )}
         </nav>
+        {isDesktopSidebarOpen && (
+          <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} className="mt-8 pt-4 border-t border-gray-200">
+            <CopyrightText />
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Main content */}

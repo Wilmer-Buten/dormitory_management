@@ -21,6 +21,7 @@ import { useStore } from "../store/useStore";
             setAccessToken(data.accessToken); // Establecer el nuevo token de acceso
           } else if (response.status === 401) {
             // Si el token de acceso ha expirado, solicitar un nuevo accessToken
+            console.log(data.message)
             await refreshTokens();
           } else {
             console.log(data)
@@ -52,6 +53,7 @@ import { useStore } from "../store/useStore";
           setAccessToken(data.accessToken); // Establecer el nuevo token de acceso
           setCurrentUser(data.user);
         } else {
+            console.log(data.message)
             setAccessToken(''); // Si el refreshToken es inválido, limpiamos los tokens
             setIsAuthenticated(false);
             console.log(data.message)

@@ -35,6 +35,7 @@ export const translations = {
     },
     common: {
       cancel: 'Cancel',
+      delete: 'Delete',
       save: 'Save'
     },
     import: {
@@ -66,6 +67,11 @@ export const translations = {
         button: 'Select File'
       }
     },
+    students: {
+      delete: 'Delete Student',
+      deleteConfirm: 'Are you sure you want to delete this student?',
+      deleteConfirmButton: 'Confirm Deletion'
+    },
     users: {
       title: 'User Management',
       subtitle: 'Create and manage user accounts',
@@ -80,6 +86,10 @@ export const translations = {
       roles: {
         admin: 'Administrator',
         staff: 'Staff'
+      },
+      userDeletionModal: {
+        title: 'Confirm Deletion',
+        description: 'Are you sure you want to delete'
       },
       building: 'Building',
       actions: 'Actions',
@@ -134,6 +144,7 @@ export const translations = {
     },
     common: {
       cancel: 'Cancelar',
+      delete: 'Eliminar',
       save: 'Guardar'
     },
     auth: {
@@ -171,6 +182,11 @@ export const translations = {
         button: 'Seleccionar Archivo'
       }
     },
+    students: {
+      delete: 'Eliminar Estudiante',
+      deleteConfirm: '¿Estás seguro de que quieres eliminar este estudiante?',
+      deleteConfirmButton: 'Confirmar Eliminación'
+    },
     users: {
       title: 'Gestión de Usuarios',
       subtitle: 'Crea y administra cuentas de usuario',
@@ -182,6 +198,10 @@ export const translations = {
       search: 'Buscar usuarios...',
       name: 'Nombre',
       role: 'Rol',
+      userDeletionModal: {
+        title: 'Confirmar Eliminación',
+        description: 'Confirma que deseas eliminar el usuario'
+      },
       roles: {
         admin: 'Administrador',
         staff: 'Personal'
@@ -233,6 +253,7 @@ export const translations = {
     },
     common: {
       cancel: 'Annuler',
+      delete: 'Supprimer',
       save: 'Enregistrer'
     },
     menu: {
@@ -276,6 +297,11 @@ export const translations = {
         button: 'Sélectionner un Fichier'
       }
     },
+    students: {
+      delete: 'Supprimer Étudiant',
+      deleteConfirm: 'Êtes-vous sûr de vouloir supprimer cet étudiant?',
+      deleteConfirmButton: 'Confirmer la Suppression'
+    },
     users: {
       title: 'Gestion des Utilisateurs',
       subtitle: 'Créer et gérer les comptes utilisateurs',
@@ -287,6 +313,10 @@ export const translations = {
       search: 'Rechercher des utilisateurs...',
       name: 'Nom',
       role: 'Rôle',
+      userDeletionModal: {
+        title: 'Confirmer la suppression',
+        description: 'Êtes-vous sûr de vouloir supprimer cet utilisateur?'
+      },
       roles: {
         admin: 'Administrateur',
         staff: 'Personnel'

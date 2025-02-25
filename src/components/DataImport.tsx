@@ -1,10 +1,11 @@
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useStore } from "../store/useStore"
 import { Upload, FileSpreadsheet, AlertCircle, TableIcon, ChevronDown } from "lucide-react"
 import { read, utils } from "xlsx"
 import toast, { Toaster } from "react-hot-toast"
 import type { PreviewData } from "../types"
+import ModalComponent from "./ModalComponent"
 
 function DataImport() {
   const { getTranslation, importStudents, rooms } = useStore()
@@ -109,8 +110,30 @@ function DataImport() {
   }
 
   const checkForMatches = (data: any[]) => {
-    console.log(data, rooms)
+    console.log( rooms)
+    let err = {
+      suite: '',
+      room: '',
+      building: ''
+    }
     const matches = data.filter((row) => {
+      let rowNum =  row.__rowNum__; 
+      if (!row.suite || row.suite.length === 0) {
+        err.suite = "It seems that a suite field is empty (see row " + rowNum + ")";
+      } else if (!row.room || row.room.length === 0) {
+        err.room = "It seems that a room field is empty (see row " + rowNum + ")";
+      } else if (!row.building || row.building.length === 0) {
+        err.building = "It seems that a building field is empty (see row " + rowNum + ")";
+      }
+    
+     if(err.suite.length > 0 || err.room.length > 0 || err.building.length > 0) {
+      toast.error(err.suite + ' ' + err.room + ' ' + err.building)
+      // setErr(true)
+      setPreviewData([])
+      setSelectedSheet("")
+      return false;
+     }      
+     console.log(row)
       return rooms.some(
         (room) =>
           room.suiteNumber === JSON.stringify(row.suite).trim() && room.letter.trim() === row.room && room.building === row.building.trim()
@@ -121,7 +144,7 @@ function DataImport() {
     return matches.length > 0
   }
 
-  const importData = async () => {
+  const importData = useCallback(async () => {
     const selectedPreview = previewData.find((p) => p.sheet === selectedSheet)
     if (selectedPreview) {
       await importStudents(selectedPreview)
@@ -130,7 +153,11 @@ function DataImport() {
       setShowConfirmModal(false)
       toast.success(t.import.success)
     }
-  }
+  } , [previewData, selectedSheet])
+
+  const handleCancelButton = useCallback(() => {
+    setShowConfirmModal(false)
+  }, []);
 
   const selectedPreview = previewData.find((p) => p.sheet === selectedSheet)
   const hasMoreRows = selectedPreview ? selectedPreview.rows.length < selectedPreview.allRows.length : false
@@ -291,25 +318,14 @@ function DataImport() {
         </div>
       )}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg max-w-md">
-            <h2 className="text-xl font-bold mb-4">{t.import.confirm.title}</h2>
-            <p className="mb-4">
-              {matchingStudents.length} {t.import.confirm.description}
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
-              >
-                {t.common.cancel}
-              </button>
-              <button onClick={importData} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                {t.import.confirm.confirmButton}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModalComponent
+          title={t.import.confirm.title}
+          description={matchingStudents.length + " " + t.import.confirm.description}
+          confirmButtonText={t.import.confirm.confirmButton}
+          handleConfirmButton={importData}
+          handleCancelButton={handleCancelButton}
+        />
+        
       )}
     </div>
   )

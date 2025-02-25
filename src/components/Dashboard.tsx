@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Toaster } from "react-hot-toast"
 import { ArrowLeft, Loader2 } from "lucide-react"
@@ -14,7 +14,6 @@ import { useStore } from "../store/useStore"
 import { useQuery } from "@tanstack/react-query"
 import { Pagination } from "./Pagination"
 
-
 function Dashboard() {
   const {
     rooms,
@@ -22,25 +21,27 @@ function Dashboard() {
     viewMode,
     selectedSuite,
     selectedBuilding,
-    isLoading,
     enableFetchRoomsQuery,
     currentPage, 
     currentUser, 
+    selectedStat,
     setEnableFetchRoomsQuery,
     onPageChange,
     setSelectedSuite,
     getSuites,
     getTranslation,
     fetchRooms,
-    setRooms
+    setRooms,
+    getFilteredRooms
   } = useStore()
 
-  const itemsPerPage = 20 // Adjust this value based on your preference
+  const [refreshDone, setRefreshDone] = useState(false)
+  const itemsPerPage = 18 // Adjust this value based on your preference
 
-  const { data, error } = useQuery({
+  const { data, error, isLoading: isLoadingRooms, refetch } = useQuery({
     queryKey: ["rooms"],
     queryFn: fetchRooms,
-    enabled: enableFetchRoomsQuery,
+    enabled: enableFetchRoomsQuery
     
   })
 
@@ -51,27 +52,27 @@ function Dashboard() {
   }, [currentUser])
 
   useEffect(() => {
-    console.log(data)
-    if (data && enableFetchRoomsQuery) {
+    if (enableFetchRoomsQuery) {
+      console.log("Fetching rooms")
+      refetch().finally(() => setEnableFetchRoomsQuery(false)); // Solo desactiva después de la consulta
+      setRefreshDone(true)
+    }
+  }, [enableFetchRoomsQuery]);
+
+  useEffect(() => {
+    if (data && refreshDone) {
       setRooms(data)
-      enableFetchRoomsQuery && setEnableFetchRoomsQuery(false)
+      setRefreshDone(false)
     }
   }, [data, currentUser]) // Added enableFetchRoomsQuery to dependencies
 
   const t = getTranslation()
 
-  const filteredRooms = rooms.filter((room) => {
-    if (selectedSuite && room.suiteId !== selectedSuite) return false
-    if (selectedBuilding !== "all" && room.building !== selectedBuilding) return false;
+  const filteredRooms = useMemo(() => {
+    return getFilteredRooms();
+  }, [selectedStat, searchQuery, selectedBuilding, selectedSuite, rooms]);
 
-    const searchLower = searchQuery.toLowerCase()
-    return (
-      room.suiteNumber.toLowerCase().includes(searchLower) ||
-      room.students.some((student) => student.name.toLowerCase().includes(searchLower))
-    )
-  })
-
-  const suites = getSuites()
+  const suites = useMemo(() => getSuites(), [rooms]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredRooms.length / itemsPerPage)
@@ -100,7 +101,7 @@ function Dashboard() {
     )
   }
 
-  if (isLoading) {
+  if (isLoadingRooms) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -112,11 +113,10 @@ function Dashboard() {
   }
 
   // const memoizedStats = useMemo(() => <Stats />, [rooms, selectedBuilding, selectedSuite])
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-right" />
-
+      
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex justify-between items-start mb-8">
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
@@ -153,8 +153,9 @@ function Dashboard() {
         <AnimatePresence mode="wait">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {viewMode === "suites" && !selectedSuite
-              ? suites.map((suite) => <SuiteCard key={suite.id} suite={suite} />)
-              : currentItems.map((room) => <RoomCard key={room.id} room={room} />)}
+              ? suites.map((suite) => <SuiteCard isLoading={enableFetchRoomsQuery} key={suite.id} suite={suite} />)
+              : currentItems.map((room) => <RoomCard key={room.id} room={room} isLoading={enableFetchRoomsQuery} />)
+            }
           </div>
         </AnimatePresence>
 
@@ -166,5 +167,5 @@ function Dashboard() {
   )
 }
 
-export default Dashboard
+export default Dashboard;
 

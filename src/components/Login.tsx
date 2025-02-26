@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { LogIn } from 'lucide-react';
+import ouLogo from '../assets/ou_logo.webp'
+import tempLogo from '../assets/temp_logo.webp'
+import CopyrightText from './CopyrightText';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -23,6 +26,20 @@ export function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+      <div className="flex justify-center items-center gap-8 mb-6">
+          <img
+            src={ouLogo}
+            alt="Oakwood University Logo"
+            className="h-auto w-auto max-h-28 max-w-28 object-contain"
+            loading="lazy"
+          />
+          <img
+            src={tempLogo}
+            alt="University Building Logo"
+            className="h-auto w-auto max-h-32 max-w-32 object-contain"
+            loading="lazy"
+          />
+        </div>
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             {t.auth.signIn}
@@ -80,6 +97,9 @@ export function Login() {
             </button>
           </div>
         </form>
+        <div className="absolute bottom-10 left-0 right-0">
+          <CopyrightText />
+        </div>
       </div>
     </div>
   );

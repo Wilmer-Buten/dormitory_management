@@ -68,7 +68,7 @@ interface Store {
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
-
+const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
 export const useStore = create<Store>((set, get) => ({
   rooms: [],
   users: [],
@@ -81,13 +81,13 @@ export const useStore = create<Store>((set, get) => ({
   selectedSuite: null,
   selectedBuilding: 'all',
   language: 'en',
-  isLoading: true,
+  isLoading: isAuthenticated,
   err: null,
   enableFetchRoomsQuery: false,
   enableFetchUsersQuery: true,
   theme: 'light',
   currentSection: 'dashboard',
-  isAuthenticated: localStorage.getItem("isAuthenticated") === "true", 
+  isAuthenticated: isAuthenticated, 
   accessToken: '',
   selectedStat: 'all',
   onPageChange: (page) => set({ currentPage: page }),
@@ -101,13 +101,12 @@ export const useStore = create<Store>((set, get) => ({
   setCurrentUser: (user) => set({ currentUser: user }),
   setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '' }),
   setSelectedSuite: (suiteId) => set({ selectedSuite: suiteId }),
-  setSelectedBuilding: (building) => set({ selectedBuilding: building, currentPage: 1 }),
+  setSelectedBuilding: (building) => set({ selectedBuilding: building, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' }),
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme: theme }),
   setCurrentSection: (section) => set({ currentSection: section }),
   fetchRooms: async () => {
-    set({ isLoading: true, err: null });
     try {
       let dateQueryParam = get().selectedDate ? `?building_id=${get().currentUser?.building_id}&date=${get().selectedDate}` : '';
       const response = await fetch(`${API_URL}/rooms${dateQueryParam}`);
@@ -120,6 +119,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
   login: async (email: string, password: string) => {
+    set({ isLoading: true, err: null });
     try {
       const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
@@ -131,6 +131,7 @@ export const useStore = create<Store>((set, get) => ({
       });
 
       if (!response.ok) {
+        set({ isLoading: false });
         throw new Error('Credenciales inválidas');
       }
 
@@ -145,7 +146,8 @@ export const useStore = create<Store>((set, get) => ({
           building_id: data.user.building_id
         },
         isAuthenticated: true,
-        accessToken: data.accessToken
+        accessToken: data.accessToken,
+        isLoading: false
       });
     } catch (error) {
       throw error;
@@ -155,7 +157,7 @@ export const useStore = create<Store>((set, get) => ({
   logout: async () => {
     try {
       // Hacer la solicitud de logout al backend
-      const response = await fetch('http://localhost:4000/logout', {
+      const response = await fetch(`${API_URL}/logout`, {
         method: 'POST',
         credentials: 'include', // Para que envíe la cookie
       });

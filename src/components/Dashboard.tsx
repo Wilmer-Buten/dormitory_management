@@ -32,11 +32,12 @@ function Dashboard() {
     getTranslation,
     fetchRooms,
     setRooms,
-    getFilteredRooms
+    getFilteredRooms,
+    isLoading
   } = useStore()
 
   const [refreshDone, setRefreshDone] = useState(false)
-  const itemsPerPage = 18 // Adjust this value based on your preference
+  const itemsPerPage = 18 
 
   const { data, error, isLoading: isLoadingRooms, refetch } = useQuery({
     queryKey: ["rooms"],
@@ -53,8 +54,7 @@ function Dashboard() {
 
   useEffect(() => {
     if (enableFetchRoomsQuery) {
-      console.log("Fetching rooms")
-      refetch().finally(() => setEnableFetchRoomsQuery(false)); // Solo desactiva después de la consulta
+      refetch().finally(() => setEnableFetchRoomsQuery(false)); 
       setRefreshDone(true)
     }
   }, [enableFetchRoomsQuery]);
@@ -64,7 +64,7 @@ function Dashboard() {
       setRooms(data)
       setRefreshDone(false)
     }
-  }, [data, currentUser]) // Added enableFetchRoomsQuery to dependencies
+  }, [data, currentUser])
 
   const t = getTranslation()
 
@@ -101,7 +101,7 @@ function Dashboard() {
     )
   }
 
-  if (isLoadingRooms) {
+  if (isLoadingRooms || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -112,7 +112,6 @@ function Dashboard() {
     )
   }
 
-  // const memoizedStats = useMemo(() => <Stats />, [rooms, selectedBuilding, selectedSuite])
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-right" />
@@ -132,11 +131,17 @@ function Dashboard() {
           <Stats />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <SearchBar />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <SearchBar />
+          </div>
           <DateSelector />
-          <BuildingSelector />
-          <ViewToggle />
+          <div className="sm:col-span-2 lg:col-span-1">
+            <BuildingSelector />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-1">
+            <ViewToggle />
+          </div>
         </div>
         {selectedSuite && (
           <motion.button

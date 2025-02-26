@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useStore } from "../store/useStore";
+
   // Proveedor de autenticación
   export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { setAccessToken, accessToken, setIsAuthenticated, setCurrentUser,isAuthenticated } = useStore();
-    const api = 'http://localhost:4000';
+    const api = import.meta.env.VITE_API_URL;
     useLayoutEffect(() => {
       const fetchMe = async () => {
         try {
@@ -17,18 +18,14 @@ import { useStore } from "../store/useStore";
   
           const data = await response.json();
           if (response.ok) {
-            console.log(data)
-            setAccessToken(data.accessToken); // Establecer el nuevo token de acceso
+            setAccessToken(data.accessToken); 
           } else if (response.status === 401) {
-            // Si el token de acceso ha expirado, solicitar un nuevo accessToken
-            console.log(data.message)
+          
             await refreshTokens();
           } else {
-            console.log(data)
             setAccessToken('');
           }
         } catch (error) {
-          console.error('Error fetching user:', error);
           setAccessToken('');
         }
       };
@@ -50,16 +47,13 @@ import { useStore } from "../store/useStore";
         const data = await response.json();
         if (response.ok) {
           console.log(data)
-          setAccessToken(data.accessToken); // Establecer el nuevo token de acceso
+          setAccessToken(data.accessToken);
           setCurrentUser(data.user);
         } else {
-            console.log(data.message)
-            setAccessToken(''); // Si el refreshToken es inválido, limpiamos los tokens
+            setAccessToken('');
             setIsAuthenticated(false);
-            console.log(data.message)
         }
       } catch (error) {
-        console.error('Error refreshing tokens:', error);
         setAccessToken('');
         isAuthenticated && setIsAuthenticated(false);
       }

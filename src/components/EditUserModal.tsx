@@ -33,10 +33,12 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
         user.role !== formData.role ||
         user.building_id !== formData.building_id
       ) {
+        onClose();
         await updateUser(user.id, formData);
+      }else {
+        onClose();
       }
 
-      onClose();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Error al actualizar usuario"
@@ -46,7 +48,6 @@ export function EditUserModal({ user, onClose }: EditUserModalProps) {
   };
 
   const handleUserDeletion = async () => {
-    window.scrollTo(0, 0);
     onClose();
     setUserDeletion(false);
     await deleteUser(user.id);

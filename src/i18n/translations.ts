@@ -14,6 +14,7 @@ export const translations = {
     building: 'Building',
     verifiedBy: 'Verified by',
     noStudents: 'No students',
+    forbidden: 'You are not authorized to perform this action',
     buildings: {
       edwards: 'Edwards Hall',
       holland: 'Holland Hall',
@@ -40,6 +41,7 @@ export const translations = {
     },
     import: {
       title: 'Import Data',
+      importButton: 'Import Data',
       subtitle: 'Upload your Excel file with students, rooms, and suites data',
       success: 'Data imported successfully',
       error: 'Error importing data. Please check your file format',
@@ -65,6 +67,13 @@ export const translations = {
         title: 'Upload Excel File',
         description: 'Drag and drop your Excel file here, or click to select',
         button: 'Select File'
+      },
+      dataPreview: {
+        title: 'Data Preview',
+        legend: {
+          redLabel: 'red records indicate matches with existing room data (will be overwritten).',
+          yellowLabel: 'yellow records indicate matches with existing student names (will be ignored).'
+        }
       }
     },
     students: {
@@ -129,6 +138,7 @@ export const translations = {
     building: 'Edificio',
     verifiedBy: 'Verificado por',
     noStudents: 'No hay estudiantes',
+    forbidden: 'No tienes autorización para realizar esta acción',
     buildings: {
       all: 'Todos los Edificios',
       edwards: 'Edificio Edwards',
@@ -155,6 +165,7 @@ export const translations = {
     }, 
     import: {
       title: 'Importar Datos',
+      importButton: 'Importar Datos',
       subtitle: 'Sube tu archivo Excel con datos de estudiantes, habitaciones y suites',
       success: 'Datos importados exitosamente',
       error: 'Error al importar datos. Por favor verifica el formato del archivo',
@@ -180,6 +191,13 @@ export const translations = {
         title: 'Subir Archivo Excel',
         description: 'Arrastra y suelta tu archivo Excel aquí, o haz clic para seleccionar',
         button: 'Seleccionar Archivo'
+      },
+      dataPreview: {
+        title: 'Vista Previa de Datos',
+        legend: {
+          redLabel: 'los registros rojos indican que se encontraron coincidencias en las habitaciones (¡serán sobreescritos!)',
+          yellowLabel: 'los registros amarillos indican que se encontraron coincidencias en las habitaciones con los mismos estudiantes (¡se ignorarán!)'
+        }
       }
     },
     students: {
@@ -244,6 +262,7 @@ export const translations = {
     building: 'Bâtiment',
     verifiedBy: 'Vérifié par',
     noStudents: 'Pas d\'étudiants',
+    forbidden: 'Vous n\'êtes pas autorisé à effectuer cette action',
     buildings: {
       all: 'Tous les Bâtiments',
       edwards: 'Bâtiment Edwards',
@@ -288,6 +307,7 @@ export const translations = {
         building: 'Bâtiment (Ex: Edwards)'
       },
       note: {
+
         title: 'Note Importante',
         description: 'Assurez-vous que les données sont correctement formatées dans le fichier, et que la feuille nommée "Étudiants" est présente.'
       },
@@ -295,7 +315,14 @@ export const translations = {
         title: 'Télécharger un Fichier Excel',
         description: 'Glissez et déposez votre fichier Excel ici, ou cliquez pour sélectionner',
         button: 'Sélectionner un Fichier'
-      }
+      },
+      dataPreview: {
+        title: 'Aperçu des Données',
+        legend: {
+          redLabel: 'les enregistrements rouges indiquent des correspondances avec les chambres existantes (seront écrasés).',
+          yellowLabel: 'les enregistrements jaunes indiquent des correspondances avec les noms des étudiants existants (seront ignorés).'
+        }
+    }
     },
     students: {
       delete: 'Supprimer Étudiant',

@@ -3,6 +3,21 @@ import { Room, User, Suite, Language, PreviewData } from '../types';
 import { translations } from '../i18n/translations';
 import toast from 'react-hot-toast';
 
+const getBuilding = (building_id : Number) => {
+  switch (building_id) {
+    case 1:
+      return 'edwards';
+    case 2:
+      return 'holland';
+    case 3:
+      return 'peterson';
+    case 4:
+      return 'wade';
+    default:
+      return 'all';
+  }
+}
+
 interface Store {
   rooms: Room[];
   users: User[];
@@ -47,7 +62,7 @@ interface Store {
   fetchCurrentUser: () => Promise<void>;
   updateUser: (userId: number | undefined, userData: Partial<User>) => Promise<void>;
   deleteUser: (userId: number | undefined) => Promise<void>;
-  importStudents: (students: PreviewData) => Promise<void>;
+  importStudents: (students: PreviewData, studentSelections?: Record<string, string>) => Promise<void>;
   setIsLoading: (isLoading: boolean) => void; 
   setIsAuthenticated: (status: boolean) => void;
   setAccessToken: (accessToken: string) => void;
@@ -101,17 +116,26 @@ export const useStore = create<Store>((set, get) => ({
   setCurrentUser: (user) => set({ currentUser: user }),
   setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '' }),
   setSelectedSuite: (suiteId) => set({ selectedSuite: suiteId }),
-  setSelectedBuilding: (building) => set({ selectedBuilding: building, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' }),
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme: theme }),
   setCurrentSection: (section) => set({ currentSection: section }),
+  setSelectedBuilding: (building) => {
+    const currentUserBuildingId = get().currentUser?.building_id;
+    if (currentUserBuildingId === null || currentUserBuildingId === 5) {
+      set({ selectedBuilding: building, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' })
+    } else {
+      toast.error(get().getTranslation().forbidden);
+    }
+  },  
+  
   fetchRooms: async () => {
     try {
       let dateQueryParam = get().selectedDate ? `?building_id=${get().currentUser?.building_id}&date=${get().selectedDate}` : '';
       const response = await fetch(`${API_URL}/rooms${dateQueryParam}`);
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
+      set({selectedBuilding: getBuilding(get().currentUser?.building_id || 0)});
      return data;
     } catch (error) {
       set({ err: (error as Error).message, isLoading: false });
@@ -288,7 +312,9 @@ export const useStore = create<Store>((set, get) => ({
   },
   updateUser: async (userId: number | undefined, userData: Partial<User>) => {
     try {
+      
       let user = {...userData, id: userId};
+      set({ isLoading: true });
       const response = await fetch(`${API_URL}/users/edit/${userId}`, {
         method: 'PUT',
         headers: {
@@ -308,11 +334,13 @@ export const useStore = create<Store>((set, get) => ({
             return updatedUser;
           }
           return user;
-        })
+        }),
+        isLoading: false
       })
       toast.success('User updated successfully');
       return updatedUser;
     } catch (error) {
+      set({ isLoading: false });
       toast.error('Error updating user');
       throw error;
     }
@@ -531,7 +559,8 @@ export const useStore = create<Store>((set, get) => ({
     localStorage.setItem("isAuthenticated", JSON.stringify(status)); // Guardar en localStorage
   },
 
-  importStudents: async (students: PreviewData) => {
+  importStudents: async (previewData, studentSelections = {}) => {
+    console.log(previewData, studentSelections)
     set({ isLoading: true, err: null });
     try {
       const response = await fetch(`${API_URL}/students/import`, {
@@ -539,15 +568,19 @@ export const useStore = create<Store>((set, get) => ({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(students.rows)
+        body: JSON.stringify({
+          students: previewData.allRows,
+          studentSelections
+        })
       });
       const data = await response.json();
       if (!response.ok) {
         toast.error(data.message);
-        throw new Error('Failed to import students')
-      };
+        throw new Error('Failed to import students');
+      }
       set({ isLoading: false, enableFetchRoomsQuery: true });
     } catch (error) {
+      set({ isLoading: false });
       toast.error('Error importing students');
     }
   },

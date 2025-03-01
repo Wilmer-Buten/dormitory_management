@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { LogIn } from 'lucide-react';
 import ouLogo from '../assets/ou_logo.webp'
@@ -9,8 +9,12 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, getTranslation, isLoading } = useStore();
+  const { login, getTranslation, isLoading, setIsLoading } = useStore();
   const t = getTranslation();
+
+  useEffect(() => {
+    isLoading && setIsLoading(false);
+  },[]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

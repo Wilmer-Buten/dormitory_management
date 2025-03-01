@@ -1,19 +1,12 @@
-import React, { useMemo, useState, useCallback } from "react";
-import { useStore } from "../store/useStore";
-import {
-  UserPlus,
-  Search,
-  Mail,
-  Key,
-  User as UserIcon,
-  Loader2,
-  Plus,
-  X,
-} from "lucide-react";
-import { Toaster } from "react-hot-toast";
-import { useQuery } from "@tanstack/react-query";
-import { Translation, User } from "../types";
-import { EditUserModal } from "./EditUserModal";
+"use client"
+
+import React, { useMemo, useState, useCallback } from "react"
+import { useStore } from "../store/useStore"
+import { UserPlus, Search, Mail, Key, UserIcon, Loader2, Plus, X } from "lucide-react"
+import { Toaster } from "react-hot-toast"
+import { useQuery } from "@tanstack/react-query"
+import type { Translation, User } from "../types"
+import { EditUserModal } from "./EditUserModal"
 
 // Componente para el formulario de creación
 const CreateUserForm = React.memo(
@@ -22,9 +15,9 @@ const CreateUserForm = React.memo(
     onCancel,
     t,
   }: {
-    onSubmit: (formData: User) => void;
-    onCancel: () => void;
-    t: Translation;
+    onSubmit: (formData: User) => void
+    onCancel: () => void
+    t: Translation
   }) => {
     const [formData, setFormData] = useState({
       username: "",
@@ -33,51 +26,43 @@ const CreateUserForm = React.memo(
       name: "",
       role: "staff" as "admin" | "staff",
       building: "edwards",
-    });
-    const [passwordError, setPasswordError] = useState("");
+    })
+    const [passwordError, setPasswordError] = useState("")
 
-    const handleInputChange = useCallback(
-      (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target
+      setFormData((prev) => ({ ...prev, [name]: value }))
 
-        if (name === "password" || name === "confirmPassword") {
-          setPasswordError("");
-        }
-      },
-      []
-    );
+      if (name === "password" || name === "confirmPassword") {
+        setPasswordError("")
+      }
+    }, [])
 
     const handleSubmit = useCallback(
       (e: React.FormEvent) => {
-        e.preventDefault();
+        e.preventDefault()
 
         if (formData.password !== formData.confirmPassword) {
-          setPasswordError("Passwords do not match");
-          return;
+          setPasswordError("Passwords do not match")
+          return
         }
 
-        const { confirmPassword, ...submitData } = formData;
-        onSubmit(submitData);
+        const { confirmPassword, ...submitData } = formData
+        onSubmit(submitData)
       },
-      [formData, onSubmit]
-    );
+      [formData, onSubmit],
+    )
 
     return (
       <div className="bg-white rounded-lg shadow p-6 mb-8">
         <h2 className="text-xl font-semibold mb-6">{t.users.createNew}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t.users.email}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.email}</label>
               <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="email"
                   name="username"
@@ -91,14 +76,9 @@ const CreateUserForm = React.memo(
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t.users.name}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.name}</label>
               <div className="relative">
-                <UserIcon
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
                   name="name"
@@ -112,14 +92,9 @@ const CreateUserForm = React.memo(
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t.users.password}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.password}</label>
               <div className="relative">
-                <Key
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="password"
                   name="password"
@@ -133,14 +108,9 @@ const CreateUserForm = React.memo(
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm {t.users.password}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm {t.users.password}</label>
               <div className="relative">
-                <Key
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="password"
                   name="confirmPassword"
@@ -153,15 +123,11 @@ const CreateUserForm = React.memo(
                   required
                 />
               </div>
-              {passwordError && (
-                <p className="mt-1 text-sm text-red-500">{passwordError}</p>
-              )}
+              {passwordError && <p className="mt-1 text-sm text-red-500">{passwordError}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t.users.role}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.role}</label>
               <select
                 name="role"
                 value={formData.role}
@@ -175,9 +141,7 @@ const CreateUserForm = React.memo(
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t.users.building}
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.building}</label>
               <select
                 name="building"
                 value={formData.building}
@@ -211,9 +175,9 @@ const CreateUserForm = React.memo(
           </div>
         </form>
       </div>
-    );
-  }
-);
+    )
+  },
+)
 
 // Componente para la tabla de usuarios
 const UsersTable = React.memo(
@@ -223,33 +187,30 @@ const UsersTable = React.memo(
     t,
     getBuildingName,
   }: {
-    users: User[];
-    onEdit: (user: User) => void;
-    t: any;
-    getBuildingName: (id: number | undefined) => string;
+    users: User[]
+    onEdit: (user: User) => void
+    t: any
+    getBuildingName: (id: number | undefined) => string
   }) => (
-    <table className="w-full">
+    <table className="w-full min-w-[650px]">
       <thead>
         <tr className="text-left text-gray-500 border-b">
-          <th className="pb-4">{t.users.name}</th>
-          <th className="pb-4">{t.users.email}</th>
-          <th className="pb-4">{t.users.role}</th>
-          <th className="pb-4">{t.users.building}</th>
-          <th className="pb-4">{t.users.actions}</th>
+          <th className="pb-4 px-2 whitespace-nowrap">{t.users.name}</th>
+          <th className="pb-4 px-2 whitespace-nowrap">{t.users.email}</th>
+          <th className="pb-4 px-2 whitespace-nowrap">{t.users.role}</th>
+          <th className="pb-4 px-2 whitespace-nowrap">{t.users.building}</th>
+          <th className="pb-4 px-2 whitespace-nowrap">{t.users.actions}</th>
         </tr>
       </thead>
       <tbody>
         {users.map((user) => (
           <tr key={user.id} className="border-b">
-            <td className="py-4">{user.name}</td>
-            <td className="py-4">{user.username}</td>
-            <td className="py-4">{user.role}</td>
-            <td className="py-4">{getBuildingName(user.building_id)}</td>
-            <td className="py-4">
-              <button
-                className="text-blue-600 hover:text-blue-700"
-                onClick={() => onEdit(user)}
-              >
+            <td className="py-4 px-2">{user.name}</td>
+            <td className="py-4 px-2">{user.username}</td>
+            <td className="py-4 px-2">{user.role}</td>
+            <td className="py-4 px-2">{getBuildingName(user.building_id)}</td>
+            <td className="py-4 px-2">
+              <button className="text-blue-600 hover:text-blue-700" onClick={() => onEdit(user)}>
                 {t.users.edit}
               </button>
             </td>
@@ -257,37 +218,30 @@ const UsersTable = React.memo(
         ))}
       </tbody>
     </table>
-  )
-);
+  ),
+)
 
 function UserManagement() {
-  const {
-    getTranslation,
-    users,
-    fetchUsers,
-    createUser,
-    enableFetchUsersQuery,
-    isLoading,
-  } = useStore();
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const t = getTranslation();
+  const { getTranslation, users, fetchUsers, createUser, enableFetchUsersQuery, isLoading } = useStore()
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const t = getTranslation()
 
   const getBuildingName = useCallback((id: number | undefined) => {
     switch (id) {
       case 1:
-        return "Edwards Hall";
+        return "Edwards Hall"
       case 2:
-        return "Holland Hall";
+        return "Holland Hall"
       case 3:
-        return "Peterson Hall";
+        return "Peterson Hall"
       case 4:
-        return "Wade Hall";
+        return "Wade Hall"
       default:
-        return "All Buildings";
+        return "All Buildings"
     }
-  }, []);
+  }, [])
 
   const filteredUsers = useMemo(
     () =>
@@ -296,25 +250,29 @@ function UserManagement() {
           user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.building?.toLowerCase().includes(searchTerm.toLowerCase())
+          user.building?.toLowerCase().includes(searchTerm.toLowerCase()),
       ),
-    [users, searchTerm]
-  );
+    [users, searchTerm],
+  )
 
   const handleCreateUser = useCallback(
     async (formData: any) => {
-      await createUser(formData);
+      await createUser(formData)
     },
-    [createUser]
-  );
+    [createUser],
+  )
 
   const { isLoading: isLoadingUsers } = useQuery({
     queryKey: ["users"],
     queryFn: fetchUsers,
     enabled: enableFetchUsersQuery,
-  });
+  })
 
-  console.log(enableFetchUsersQuery);
+  const handleModalClose = () => {
+    setEditingUser(null)
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   if (isLoadingUsers) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -323,16 +281,14 @@ function UserManagement() {
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <Toaster position="top-right" />
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
-          {t.users.title}
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.users.title}</h1>
         <p className="text-gray-600">{t.users.subtitle}</p>
       </div>
 
@@ -349,41 +305,27 @@ function UserManagement() {
       {isLoading ? (
         <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
       ) : (
-        showCreateForm && (
-          <CreateUserForm
-            onSubmit={handleCreateUser}
-            onCancel={() => setShowCreateForm(false)}
-            t={t}
-          />
-        )
+        showCreateForm && <CreateUserForm onSubmit={handleCreateUser} onCancel={() => setShowCreateForm(false)} t={t} />
       )}
 
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">{t.users.list}</h2>
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={20}
-              />
+            <div className="relative w-full sm:w-auto">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder={t.users.search}
-                className="pl-10 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="pl-10 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          <UsersTable
-            users={filteredUsers}
-            onEdit={setEditingUser}
-            t={t}
-            getBuildingName={getBuildingName}
-          />
+        <div className="p-6 overflow-x-auto">
+          <UsersTable users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} />
         </div>
       </div>
 
@@ -394,13 +336,14 @@ function UserManagement() {
             building: getBuildingName(editingUser.building_id),
             id: editingUser.id,
           }}
-          onClose={() => setEditingUser(null)}
+          onClose={handleModalClose}
         />
       )}
     </div>
-  );
+  )
 }
 
 export default UserManagement;
 
-export { UserManagement };
+export { UserManagement }
+

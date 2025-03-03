@@ -181,6 +181,7 @@ export const useStore = create<Store>((set, get) => ({
 
   logout: async () => {
     try {
+      set({ isLoading: true });
       // Hacer la solicitud de logout al backend
       const response = await fetch(`${API_URL}/logout`, {
         method: 'POST',
@@ -199,7 +200,8 @@ export const useStore = create<Store>((set, get) => ({
           enableFetchUsersQuery: true,
           rooms: [],
           users: [],
-          currentPage: 1
+          currentPage: 1,
+          isLoading: false
         });
         localStorage.removeItem('isAuthenticated');
 

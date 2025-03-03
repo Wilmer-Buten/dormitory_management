@@ -186,11 +186,13 @@ const UsersTable = React.memo(
     onEdit,
     t,
     getBuildingName,
+    currentUser
   }: {
     users: User[]
     onEdit: (user: User) => void
     t: any
     getBuildingName: (id: number | undefined) => string
+    currentUser: User | null 
   }) => (
     <table className="w-full min-w-[650px]">
       <thead>
@@ -210,19 +212,31 @@ const UsersTable = React.memo(
             <td className="py-4 px-2">{user.role}</td>
             <td className="py-4 px-2">{getBuildingName(user.building_id)}</td>
             <td className="py-4 px-2">
-              <button className="text-blue-600 hover:text-blue-700" onClick={() => onEdit(user)}>
-                {t.users.edit}
-              </button>
+              {user.username === currentUser?.username ? (
+                <button
+                  className="text-gray-400 cursor-not-allowed"
+                  disabled
+                >
+                  {t.users.edit}
+                </button>
+              ) : (
+                <button
+                  className="text-blue-600 hover:text-blue-700"
+                  onClick={() => onEdit(user)}
+                >
+                  {t.users.edit}
+                </button>
+              )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
-  ),
-)
+  )
+);
 
 function UserManagement() {
-  const { getTranslation, users, fetchUsers, createUser, enableFetchUsersQuery, isLoading } = useStore()
+  const { getTranslation, users, fetchUsers, createUser, enableFetchUsersQuery, isLoading, currentUser } = useStore()
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -325,7 +339,7 @@ function UserManagement() {
         </div>
 
         <div className="p-6 overflow-x-auto">
-          <UsersTable users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} />
+          <UsersTable users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} currentUser={currentUser} />
         </div>
       </div>
 

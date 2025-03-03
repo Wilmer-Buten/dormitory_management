@@ -13,7 +13,7 @@ import {
   ChevronUp,
   FileDown,
 } from "lucide-react";
-import { read, utils } from "xlsx";
+import { read, utils, writeFile } from "xlsx";
 import toast, { Toaster } from "react-hot-toast";
 import type { PreviewData } from "../types";
 import ModalComponent from "./ModalComponent";
@@ -43,7 +43,7 @@ function DataImport() {
         // Get all rows from the sheet
         const allRows = utils.sheet_to_json(sheet);
 
-        // Filter out completely empty rows
+        // Filter out completely empty rows and only keep columns A to D
         const filteredRows = allRows.filter((row) => {
           // Check if any property in the row has a value
           return Object.values(row).some(
@@ -53,6 +53,10 @@ function DataImport() {
               value !== "" &&
               !(typeof value === "string" && value.trim() === "")
           );
+        }).map(row => {
+          // Only keep the first 4 columns (A to D)
+          const { Name, Building, Suite, Room } = row as any;
+          return { Name, Building, Suite, Room };
         });
 
         const headers =
@@ -76,7 +80,6 @@ function DataImport() {
         setSelectedSheet(preview[0].sheet);
       }
     } catch (error) {
-      console.error("Error processing file:", error);
       toast.error(t.import.error);
     }
   };
@@ -141,6 +144,21 @@ function DataImport() {
   };
 
   const checkForMatches = (data: any[]) => {
+    const validations = {
+      buildings: [
+        "edwards",
+        "holland",
+        "peterson",
+        "wade",
+        "carter"
+      ],
+      rooms: [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    }
     const err = {
       suite: "",
       room: "",
@@ -149,10 +167,8 @@ function DataImport() {
 
     // Filtrar solo las filas que tienen datos válidos en las columnas esperadas
     const validRows = data.filter((row) => {
-      // Ignorar filas que no tienen al menos una de las columnas clave (Name, Building, Suite, Room)
       const hasRequiredFields =
         row.Name || row.Building || row.Suite || row.Room;
-      // Ignorar filas que contienen "VALIDATION RULES" en cualquier valor
       const containsValidationRules = Object.values(row).some(
         (value) =>
           typeof value === "string" && value.includes("VALIDATION RULES")
@@ -161,23 +177,27 @@ function DataImport() {
     });
 
     // Check for room matches (red highlight)
-    console.log("Filtered data:", validRows);
     const roomMatches = validRows.filter((row) => {
       const rowNum = row.__rowNum_;
-      // Normalizar Building a minúsculas para la validación
       const buildingLower = row.Building
         ? row.Building.toString().toLowerCase()
         : "";
-
-      if (!row.Suite || row.Suite.toString().trim().length === 0) {
+      
+      // Convert row.Suite to string consistently
+      const suiteStr = row.Suite ? row.Suite.toString().trim() : "";
+      
+      // Check if suite is invalid
+      if (!suiteStr || suiteStr.length === 0 || suiteStr.length !== 3 || isNaN(Number(suiteStr))) {
         err.suite =
-          "It seems that a suite field is empty (see row " + rowNum + ")";
-      } else if (!row.Room || row.Room.toString().trim().length === 0) {
+          "It seems that a suite field is invalid (see row " + rowNum + ")";
+      } else if (!row.Room || row.Room.toString().trim().length !== 1 || 
+                validations.rooms.indexOf(row.Room.toString().trim()) === -1) {
         err.room =
           "It seems that a room field is empty (see row " + rowNum + ")";
-      } else if (!buildingLower || buildingLower.length === 0) {
+      } else if (!buildingLower || buildingLower.length === 0 || 
+                validations.buildings.indexOf(buildingLower) === -1) {
         err.building =
-          "It seems that a building field is empty (see row " + rowNum + ")";
+          "It seems that a building field is invalid (see row " + rowNum + ")";
       }
 
       if (
@@ -190,14 +210,12 @@ function DataImport() {
         setSelectedSheet("");
         return false;
       }
-      console.log(rooms);
-      console.log(row);
-      console.log(buildingLower);
+
       return rooms.some(
         (room) =>
-          room.suiteNumber === row.Suite.trim() &&
+          room.suiteNumber === suiteStr && // Compare with string
           room.letter.trim() === row.Room &&
-          room.building.toLowerCase() === buildingLower && // Comparar en minúsculas
+          room.building.toLowerCase() === buildingLower &&
           room.students &&
           room.students[0] &&
           room.students[0].id !== null
@@ -207,47 +225,48 @@ function DataImport() {
     // Check for name matches (yellow highlight)
     const nameMatches = validRows.filter((row) => {
       if (!row.Name) return false;
-
+      
+      const suiteStr = row.Suite ? row.Suite.toString().trim() : "";
+      
       return rooms.some(
         (room) =>
           room.students &&
           room.students.some(
             (student) =>
               student.name &&
-              student.name.toLowerCase() === row.Name.toLowerCase()
+              student.name.toLowerCase() === row.Name.toLowerCase() &&
+              room.suiteNumber === suiteStr // Compare with string
           )
       );
     });
 
-    console.log("Room matches:", roomMatches);
-    console.log("Name matches:", nameMatches);
-
     setMatchingStudents(roomMatches);
     setMatchingNames(nameMatches);
 
-    // Initialize student selections with default values (first student in each room)
     const initialSelections: Record<string, string> = {};
     const initialExpandedRows: Record<string, boolean> = {};
     roomMatches.forEach((match) => {
-      // Normalizar Building a minúsculas para la clave y comparación
       const buildingLower = match.Building.toString().toLowerCase();
+      const suiteStr = match.Suite ? match.Suite.toString().trim() : "";
+      
       const isAlsoNameMatch = nameMatches.some(
         (nameMatch) =>
-          nameMatch.Suite === match.Suite &&
+          nameMatch.Suite.toString().trim() === suiteStr &&
           nameMatch.Room === match.Room &&
-          nameMatch.Building.toLowerCase() === buildingLower && // Comparar en minúsculas
+          nameMatch.Building.toLowerCase() === buildingLower &&
           nameMatch.Name.toLowerCase() === match.Name.toLowerCase()
       );
+      
       if (!isAlsoNameMatch) {
-        const roomKey = `${buildingLower}-${match.Suite}-${match.Room}`; // Usar building en minúsculas en la clave
+        const roomKey = `${buildingLower}-${suiteStr}-${match.Room}`;
         initialExpandedRows[roomKey] = true;
         const matchedRoom = rooms.find(
           (room) =>
-            room.suiteNumber === match.Suite.trim() &&
+            room.suiteNumber === suiteStr && // Compare with string
             room.letter.trim() === match.Room &&
-            room.building.toLowerCase() === buildingLower // Comparar en minúsculas
+            room.building.toLowerCase() === buildingLower
         );
-        console.log(matchedRoom);
+        
         if (
           matchedRoom &&
           matchedRoom.students &&
@@ -256,27 +275,29 @@ function DataImport() {
           const existingRoomKey = Object.keys(initialSelections).find((key) => {
             const [keyBuilding, keySuite, keyRoom] = key.split("-");
             return (
-              keyBuilding === buildingLower && // Comparar en minúsculas
-              keySuite === match.Suite.trim() &&
+              keyBuilding === buildingLower &&
+              keySuite === suiteStr && // Compare with string
               keyRoom === match.Room
             );
           });
+          
           const stdIndexes = selectedPreview?.rows
             .map((row, index) => {
               const rowBuildingLower = row.Building
                 ? row.Building.toString().toLowerCase()
                 : "";
+              const rowSuiteStr = row.Suite ? row.Suite.toString().trim() : "";
               const isNameMatch = nameMatches.some(
                 (nameMatch) =>
-                  nameMatch.Building.toLowerCase() === rowBuildingLower && // Comparar en minúsculas
-                  nameMatch.Suite === row.Suite &&
+                  nameMatch.Building.toLowerCase() === rowBuildingLower &&
+                  nameMatch.Suite.toString().trim() === rowSuiteStr &&
                   nameMatch.Room === row.Room &&
                   nameMatch.Name.toLowerCase() === row.Name.toLowerCase()
               );
               
               if (
-                rowBuildingLower === matchedRoom.building.toLowerCase() && // Comparar en minúsculas
-                row.Suite === matchedRoom.suiteNumber &&
+                rowBuildingLower === matchedRoom.building.toLowerCase() &&
+                rowSuiteStr === matchedRoom.suiteNumber && // Compare with string
                 row.Room === matchedRoom.letter &&
                 !isNameMatch
               ) {
@@ -285,7 +306,7 @@ function DataImport() {
               return undefined;
             })
             .filter((index) => index !== undefined);
-            console.log(stdIndexes, existingRoomKey);
+            
           if (existingRoomKey && matchedRoom.students.length === 2) {
             const existingSelection = initialSelections[existingRoomKey];
             const otherStudent = matchedRoom.students.find(
@@ -297,11 +318,9 @@ function DataImport() {
             }
           } else {
             if (matchedRoom.students.length === 1 && existingRoomKey) {
-              console.log("as");
               initialSelections[`${roomKey}-${stdIndexes && stdIndexes[1]}`] =
                 "-1";
             } else {
-              console.log(stdIndexes);
               initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] =
                 matchedRoom.students[0].id;
             }
@@ -309,9 +328,7 @@ function DataImport() {
         }
       }
     });
-    console.log(initialExpandedRows);
-    console.log(initialSelections);
-    
+
     setStudentSelections(initialSelections);
     setExpandedRows(initialExpandedRows);
 
@@ -320,8 +337,7 @@ function DataImport() {
 
   const toggleExpandedRow = useCallback(
     (roomKey: string) => {
-      console.log(roomKey);
-      console.log(expandedRows);
+  
       setExpandedRows((prev) => ({
         ...prev,
         [roomKey]: !prev[roomKey],
@@ -338,24 +354,22 @@ function DataImport() {
         ...selectedPreview,
         allRows: selectedPreview.allRows.filter((row) => {
           // Skip rows with matching names
-          if (row.name) {
-            const isNameMatching = rooms.some(
-              (room) =>
-                room.students &&
-                room.students.some(
-                  (student) =>
-                    student.name &&
-                    student.name.toLowerCase() === row.name.toLowerCase()
-                )
+          if (row.Name) {
+            const isNameMatching = matchingNames.some(
+              (student) =>
+              student.Name && student.Name.toLowerCase() === row.Name.toLowerCase()
+                
             );
-            if (isNameMatching) return false;
+            if (isNameMatching) {
+              return false;
+            }
           }
           return true;
         }),
       };
 
       // Pass the filtered preview to importStudents along with student selections
-      await importStudents(filteredPreview, studentSelections);
+      await importStudents(filteredPreview.allRows, studentSelections);
       setPreviewData([]);
       setSelectedSheet("");
       setShowConfirmModal(false);
@@ -379,7 +393,6 @@ function DataImport() {
   const handleStudentSelection = useCallback(
     (roomKey: string, studentId: string, rowIndex: number) => {
       const [building, suite, room] = roomKey.split("-");
-      console.log(studentSelections);
       const studentsInRoom = getStudentsForRoom(building, suite, room);
       if (studentsInRoom.length === 1) {
         studentsInRoom.push({
@@ -389,23 +402,14 @@ function DataImport() {
           inRoom: null,
         });
       }
-      console.log(studentsInRoom);
       const otherStudentId: any = studentsInRoom.find(
         (student) => student.id !== studentId
       )?.id;
 
-      const allRoomKeys = Object.keys(expandedRows).filter((key) => {
-        const [keyBuilding, keySuite, keyRoom] = key.split("-");
-        return (
-          keyBuilding === building && keySuite === suite && keyRoom === room
-        );
-      });
-      console.log("All room keys:", allRoomKeys, expandedRows);
       const newSelections = { ...studentSelections };
       const exitingKeyRoom = Object.keys(newSelections).filter((key) =>
         key.startsWith(`${roomKey}`)
       );
-      console.log(exitingKeyRoom);
       if (exitingKeyRoom.length === 2) {
         exitingKeyRoom.forEach((key) => {
           if (key.endsWith(rowIndex.toString())) {
@@ -415,10 +419,8 @@ function DataImport() {
           }
         });
       } else {
-        console.log(exitingKeyRoom);
         newSelections[exitingKeyRoom[0]] = studentId;
       }
-      console.log(newSelections);
       setStudentSelections(newSelections);
     },
     [expandedRows, studentSelections] // Removed getStudentsForRoom from dependencies
@@ -426,10 +428,9 @@ function DataImport() {
 
   const getStudentsForRoom = useCallback(
     (building: string, suite: string, room: string) => {
-      console.log(building, suite, room);
       const matchedRoom = rooms.find(
         (r) =>
-          r.suiteNumber === suite.trim() &&
+          r.suiteNumber === suite.toString().trim() &&
           r.letter.trim() === room &&
           r.building === building.trim().toLowerCase()
       );
@@ -466,35 +467,83 @@ function DataImport() {
       const blob = await response.blob();
       return blob;
     } catch (error) {
-      console.error("Error downloading template:", error);
       toast.error("Failed to download template", { id: "download-template" });
     }
   }, []); // Added getTemplateExcel dependency
 
   const downloadTemplateExcel = useCallback(async () => {
     try {
-      const blob = await getTemplateExcel();
-      // Create a temporary URL for the blob
-      if (blob) {
-        const url = window.URL.createObjectURL(blob);
-        // Create a temporary link element to trigger the download
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "student_import_template_with_validation.xlsx"; // Match the filename from backend
-        document.body.appendChild(link);
-        link.click();
+      // If API endpoint is available, use it
+      if (import.meta.env.VITE_API_URL) {
+        const blob = await getTemplateExcel();
+        // Create a temporary URL for the blob
+        if (blob) {
+          const url = window.URL.createObjectURL(blob);
+          // Create a temporary link element to trigger the download
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "student_import_template_with_validation.xlsx"; // Match the filename from backend
+          document.body.appendChild(link);
+          link.click();
 
-        // Clean up
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+          // Clean up
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
 
-        // Update toast to success
-        toast.success("Template downloaded successfully!", {
-          id: "download-template",
-        });
+          // Update toast to success
+          toast.success("Template downloaded successfully!", {
+            id: "download-template",
+          });
+        }
+      } else {
+        // Fallback to client-side generation if API is not available
+        // Create a new workbook
+        const workbook = utils.book_new();
+        
+        // Create sample data for the Students sheet
+        const sampleData = [
+          {
+            Name: "John Doe",
+            Building: "Edwards",
+            Suite: 101,
+            Room: "A"
+          },
+          {
+            Name: "Jane Smith",
+            Building: "Holland",
+            Suite: 202,
+            Room: "B"
+          },
+          {
+            Name: "Alex Johnson",
+            Building: "Peterson",
+            Suite: 303,
+            Room: "C"
+          }
+        ];
+        
+        // Convert the data to a worksheet
+        const worksheet = utils.json_to_sheet(sampleData);
+        
+        // Add column widths for better readability
+        const columnWidths = [
+          { wch: 20 }, // Name
+          { wch: 15 }, // Building
+          { wch: 10 }, // Suite
+          { wch: 10 }  // Room
+        ];
+        
+        worksheet['!cols'] = columnWidths;
+        
+        // Add the worksheet to the workbook
+        utils.book_append_sheet(workbook, worksheet, "Students");
+        
+        // Write the workbook and trigger a download
+        writeFile(workbook, "student_import_template.xlsx");
+        
+        toast.success("Template downloaded successfully!");
       }
     } catch (error) {
-      console.error("Error downloading template:", error);
       toast.error("Failed to download template", { id: "download-template" });
     }
   }, [getTemplateExcel]); // Added getTemplateExcel dependency
@@ -678,7 +727,7 @@ function DataImport() {
                       const buildingLower = row.Building ? row.Building.toString().toLowerCase() : "";
                       const isRoomMatching = matchingStudents.some(
                         (match) =>
-                          match.Suite === row.Suite &&
+                          match.Suite === row.Suite&&
                           match.Room === row.Room &&
                           match.Building.toLowerCase() === buildingLower // Comparar en minúsculas
                       );
@@ -698,12 +747,10 @@ function DataImport() {
                       }
   
                       const roomKey = `${buildingLower}-${row.Suite}-${row.Room}`; // Usar building en minúsculas
-                      console.log(row);
                       const studentsInRoom =
                         isRoomMatching && !isNameMatching
                           ? getStudentsForRoom(buildingLower, row.Suite, row.Room) // Pasar building en minúsculas
                           : [];
-  
                       return (
                         <>
                           <tr key={rowIndex} className={rowClass}>
@@ -748,7 +795,6 @@ function DataImport() {
                                           name={`room-${roomKey}-${rowIndex}`}
                                           value={student.id}
                                           onChange={() => {
-                                            console.log(student);
                                             handleStudentSelection(roomKey, student.id, rowIndex);
                                           }}
                                           checked={studentSelections[`${roomKey}-${rowIndex}`] === student.id}

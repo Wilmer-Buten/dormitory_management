@@ -13,6 +13,7 @@ import { useStore } from "../store/useStore";
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${accessToken}`,
+              credentials: 'include'
             },
           });
   
@@ -46,7 +47,6 @@ import { useStore } from "../store/useStore";
   
         const data = await response.json();
         if (response.ok) {
-          console.log(data)
           setAccessToken(data.accessToken);
           setCurrentUser(data.user);
         } else {

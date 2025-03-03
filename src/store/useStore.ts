@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Room, User, Suite, Language, PreviewData } from '../types';
+import { Room, User, Suite, Language } from '../types';
 import { translations } from '../i18n/translations';
 import toast from 'react-hot-toast';
 
@@ -52,7 +52,7 @@ interface Store {
   setLanguage: (lang: Language) => void;
   updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0 | null, inRoom: boolean | null) => Promise<void>;
   resetDailyChecks: () => Promise<void>;
-  fetchRooms: () => Promise<void>;
+  fetchRooms: () => Promise<Room[] | undefined>;
   fetchUsers: () => Promise<void>;
   createUser: (user: User) => Promise<void>;
   setEnableFetchRoomsQuery: (enable: boolean) => void;
@@ -62,7 +62,7 @@ interface Store {
   fetchCurrentUser: () => Promise<void>;
   updateUser: (userId: number | undefined, userData: Partial<User>) => Promise<void>;
   deleteUser: (userId: number | undefined) => Promise<void>;
-  importStudents: (students: PreviewData, studentSelections?: Record<string, string>) => Promise<void>;
+  importStudents: (students: any[], studentSelections?: Record<string, string>) => Promise<void>;
   setIsLoading: (isLoading: boolean) => void; 
   setIsAuthenticated: (status: boolean) => void;
   setAccessToken: (accessToken: string) => void;
@@ -135,8 +135,9 @@ export const useStore = create<Store>((set, get) => ({
       const response = await fetch(`${API_URL}/rooms${dateQueryParam}`);
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
-      set({selectedBuilding: getBuilding(get().currentUser?.building_id || 0)});
-     return data;
+      set({selectedBuilding: getBuilding(get().currentUser?.building_id || 0, )});
+      set({ isLoading: false, enableFetchRoomsQuery: false });
+      return data as Room[] | undefined; // Might return undefined
     } catch (error) {
       set({ err: (error as Error).message, isLoading: false });
       toast.error('Error loading rooms');
@@ -560,7 +561,7 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   importStudents: async (previewData, studentSelections = {}) => {
-    console.log(previewData, studentSelections)
+    if(previewData.length === 0) return;
     set({ isLoading: true, err: null });
     try {
       const response = await fetch(`${API_URL}/students/import`, {
@@ -569,7 +570,7 @@ export const useStore = create<Store>((set, get) => ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          students: previewData.allRows,
+          students: previewData,
           studentSelections
         })
       });
@@ -578,7 +579,8 @@ export const useStore = create<Store>((set, get) => ({
         toast.error(data.message);
         throw new Error('Failed to import students');
       }
-      set({ isLoading: false, enableFetchRoomsQuery: true });
+      const newRooms: Room[] | undefined = await get().fetchRooms();
+      set({ rooms: newRooms });
     } catch (error) {
       set({ isLoading: false });
       toast.error('Error importing students');

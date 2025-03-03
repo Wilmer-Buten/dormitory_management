@@ -30,7 +30,7 @@ export function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  const menuItems = currentUser?.building_id
+  const menuItems = currentUser?.role === 'staff'
     ? [
         { icon: LayoutDashboard, label: t.menu.dashboard, path: "dashboard" },
         { icon: Settings, label: t.menu.settings, path: "settings" },

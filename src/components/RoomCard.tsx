@@ -23,15 +23,6 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const mutation = useMutation({
     mutationFn: ({
       roomId,
@@ -206,12 +197,14 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                             <motion.button
                               whileTap={{ scale: 0.95 }}
                               onClick={() =>
-                                mutation.mutate({
-                                  roomId: room.id,
-                                  studentId: student.id,
-                                  isPresent: true,
-                                  inRoom: false
-                                })
+                                {
+                                  ((student.isPresent === false || student.isPresent === 0 || student.isPresent === null) || (student.inRoom === true || student.inRoom === 1)) && mutation.mutate({
+                                    roomId: room.id,
+                                    studentId: student.id,
+                                    isPresent: true,
+                                    inRoom: false
+                                  })
+                                }
                               }
                               className={`p-2 rounded-lg ${
                                 (student.isPresent === true ||
@@ -228,12 +221,15 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                             <motion.button
                               whileTap={{ scale: 0.95 }}
                               onClick={() =>
-                                mutation.mutate({
+                              {
+                                console.log(student.inRoom);
+                                (student.inRoom === false || student.inRoom === 0 || student.inRoom === null) && mutation.mutate({
                                   roomId: room.id,
                                   studentId: student.id,
                                   isPresent: false,
                                   inRoom: true
                                 })
+                              }
                               }
                               className={`p-2 rounded-lg ${
                                 student.inRoom === true || student.inRoom === 1
@@ -246,12 +242,14 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                             <motion.button
                               whileTap={{ scale: 0.95 }}
                               onClick={() =>
-                                mutation.mutate({
+                              {
+                                ((student.isPresent === true || student.isPresent === 1 || student.isPresent === null) || (student.inRoom === true || student.inRoom === 1)) && mutation.mutate({
                                   roomId: room.id,
                                   studentId: student.id,
                                   isPresent: false,
                                   inRoom: false
                                 })
+                              }
                               }
                               className={`p-2 rounded-lg ${
                                 (student.isPresent === false ||

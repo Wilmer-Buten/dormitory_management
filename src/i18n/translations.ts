@@ -5,6 +5,7 @@ export const translations = {
     subtitle: 'Manage your dormitory efficiently',
     search: 'Search...',
     rooms: 'Rooms',
+    room: 'Room',
     suites: 'Suites',
     backToSuites: 'Back to Suites',
     totalRooms: 'Total Rooms',
@@ -14,6 +15,7 @@ export const translations = {
     building: 'Building',
     verifiedBy: 'Verified by',
     noStudents: 'No students',
+    profile: 'Profile',
     forbidden: 'You are not authorized to perform this action',
     buildings: {
       edwards: 'Edwards Hall',
@@ -74,6 +76,11 @@ export const translations = {
           redLabel: 'red records indicate matches with existing room data (will be overwritten).',
           yellowLabel: 'yellow records indicate matches with existing student names (will be ignored).'
         }
+      },
+      template: {
+        title: 'Download Template',
+        description: 'Need a starting point? Download our Excel template with the correct format for importing student data.',
+        button: 'Download Excel Template'
       }
     },
     students: {
@@ -129,6 +136,7 @@ export const translations = {
     subtitle: 'Gestiona tu dormitorio de manera eficiente',
     search: 'Buscar...',
     rooms: 'Habitaciones',
+    room: 'Habitación',
     suites: 'Suites',
     backToSuites: 'Volver a Suites',
     totalRooms: 'Total de Habitaciones',
@@ -138,6 +146,7 @@ export const translations = {
     building: 'Edificio',
     verifiedBy: 'Verificado por',
     noStudents: 'No hay estudiantes',
+    profile: 'Perfil',
     forbidden: 'No tienes autorización para realizar esta acción',
     buildings: {
       all: 'Todos los Edificios',
@@ -198,6 +207,11 @@ export const translations = {
           redLabel: 'los registros rojos indican que se encontraron coincidencias en las habitaciones (¡serán sobreescritos!)',
           yellowLabel: 'los registros amarillos indican que se encontraron coincidencias en las habitaciones con los mismos estudiantes (¡se ignorarán!)'
         }
+      },
+      template: {
+        title: 'Descargar Plantilla',
+        description: '¿Necesitas un punto de partida? Descarga nuestra plantilla Excel con el formato correcto para importar los datos de los estudiantes.',
+        button: 'Descargar Plantilla Excel'
       }
     },
     students: {
@@ -253,6 +267,7 @@ export const translations = {
     subtitle: 'Gérez votre dortoir efficacement',
     search: 'Rechercher...',
     rooms: 'Chambres',
+    room: 'Chambre',
     suites: 'Suites',
     backToSuites: 'Retour aux Suites',
     totalRooms: 'Total des Chambres',
@@ -262,6 +277,7 @@ export const translations = {
     building: 'Bâtiment',
     verifiedBy: 'Vérifié par',
     noStudents: 'Pas d\'étudiants',
+    profile: 'Profil',
     forbidden: 'Vous n\'êtes pas autorisé à effectuer cette action',
     buildings: {
       all: 'Tous les Bâtiments',
@@ -304,7 +320,7 @@ export const translations = {
         name: 'Nom (Ex: Paul)',
         room: 'Chambre (Ex: A)',
         suite: 'Suite (Ex: 101)',
-        building: 'Bâtiment (Ex: Edwards)'
+        building: 'Bâtiment (Ex: Edwards)'      
       },
       note: {
 
@@ -322,7 +338,12 @@ export const translations = {
           redLabel: 'les enregistrements rouges indiquent des correspondances avec les chambres existantes (seront écrasés).',
           yellowLabel: 'les enregistrements jaunes indiquent des correspondances avec les noms des étudiants existants (seront ignorés).'
         }
-    }
+    },
+      template: {
+        title: 'Télécharger le Modèle',
+        description: 'Besoin d\'un point de départ? Téléchargez notre modèle Excel avec le format correct pour importer les données des étudiants.',
+        button: 'Télécharger le Modèle Excel'
+      }
     },
     students: {
       delete: 'Supprimer Étudiant',

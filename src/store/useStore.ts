@@ -106,7 +106,7 @@ export const useStore = create<Store>((set, get) => ({
   accessToken: '',
   selectedStat: 'all',
   onPageChange: (page) => set({ currentPage: page }),
-  setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode }),
+  setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode, selectedSuite: null, searchQuery: '' }),
   setEnableFetchRoomsQuery: (enable) => set({ enableFetchRoomsQuery: enable }),
   setEnableFetchUsersQuery: (enable) => set({ enableFetchUsersQuery: enable }),
   setError: (err) => set({ err }),
@@ -433,7 +433,7 @@ export const useStore = create<Store>((set, get) => ({
                     ...student, 
                     isPresent,
                     inRoom,
-                    lastCheckedBy: currentUser.username,
+                    lastCheckedBy: currentUser.name,
                     lastCheckedAt: data.lastCheckedAt
                   };
                 }

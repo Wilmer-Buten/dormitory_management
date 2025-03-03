@@ -50,6 +50,7 @@ export interface Translation {
   subtitle: string;
   search: string;
   rooms: string;
+  room: string;
   suites: string;
   backToSuites: string;
   totalRooms: string;
@@ -59,6 +60,7 @@ export interface Translation {
   building: string;
   verifiedBy: string;
   noStudents: string;
+  profile: string; 
   buildings: {
     all: string;
     edwards: string;
@@ -111,6 +113,11 @@ export interface Translation {
       description: string;
       button: string;
     };
+    template: {
+      title: string;
+      description: string;
+      button: string;
+    }
   };
   students: {
     delete: string;

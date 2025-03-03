@@ -604,10 +604,10 @@ function DataImport() {
   
             {/* Template Download Section */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">Download Template</h2>
+              <h2 className="text-xl font-semibold mb-4">{t.import.template.title}</h2>
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  Need a starting point? Download our Excel template with the correct format for importing student data.
+                  {t.import.template.description} 
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -615,7 +615,7 @@ function DataImport() {
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
                     <FileDown size={20} />
-                    Download Excel Template
+                    {t.import.template.button}
                   </button>
                 </div>
               </div>

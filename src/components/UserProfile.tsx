@@ -50,7 +50,7 @@ export const UserProfile: React.FC = () => {
                   } group flex w-full items-center rounded-md px-2 py-2 text-sm`}
                 >
                   <User className="mr-2 h-5 w-5" aria-hidden="true" />
-                  {"Profile"}
+                  {t.profile}
                 </button>
               )}
             </Menu.Item>

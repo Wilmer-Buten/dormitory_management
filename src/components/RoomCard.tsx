@@ -15,7 +15,7 @@ interface RoomCardProps {
 }
 
 export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
-  const { currentUser, getTranslation, setIsLoading, addStudent, updateStudentPresence, deleteStudent } = useStore();
+  const { getTranslation, setIsLoading, addStudent, updateStudentPresence, deleteStudent } = useStore();
   const t = getTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -173,7 +173,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
             <>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  Room {room.suiteNumber} {room.letter} - {room.building}
+                  {t.room} {room.suiteNumber} {room.letter} - {room.building}
                 </h3>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -269,7 +269,8 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                           <div className="flex items-center gap-2 text-sm text-gray-500 px-3">
                             <Clock size={14} />
                             <span>
-                              {t.verifiedBy} {currentUser?.name} ||{" "}
+
+                              {t.verifiedBy} {student.lastCheckedBy} ||{" "}
                               {student.lastCheckedAt}
                             </span>
                           </div>

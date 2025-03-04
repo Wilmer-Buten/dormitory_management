@@ -73,7 +73,7 @@ export const translations = {
       dataPreview: {
         title: 'Data Preview',
         legend: {
-          redLabel: 'red records indicate matches with existing room data (will be overwritten).',
+          redLabel: 'red records indicate matches with existing room data (action required).',
           yellowLabel: 'yellow records indicate matches with existing student names (will be ignored).'
         }
       },
@@ -204,7 +204,7 @@ export const translations = {
       dataPreview: {
         title: 'Vista Previa de Datos',
         legend: {
-          redLabel: 'los registros rojos indican que se encontraron coincidencias en las habitaciones (¡serán sobreescritos!)',
+          redLabel: 'los registros rojos indican que se encontraron coincidencias en las habitaciones (acción requerida)',
           yellowLabel: 'los registros amarillos indican que se encontraron coincidencias en las habitaciones con los mismos estudiantes (¡se ignorarán!)'
         }
       },
@@ -335,7 +335,7 @@ export const translations = {
       dataPreview: {
         title: 'Aperçu des Données',
         legend: {
-          redLabel: 'les enregistrements rouges indiquent des correspondances avec les chambres existantes (seront écrasés).',
+          redLabel: 'les enregistrements rouges indiquent des correspondances avec les chambres existantes (action requise).',
           yellowLabel: 'les enregistrements jaunes indiquent des correspondances avec les noms des étudiants existants (seront ignorés).'
         }
     },

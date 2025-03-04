@@ -19,7 +19,7 @@ export interface PreviewData {
 export interface Room {
   id: string;
   letter: 'A' | 'B' | 'C' | 'D';
-  suiteNumber: string;
+  suiteNumber: number;
   suiteId: string; // Suite ID
   building: string;
   students: Student[];

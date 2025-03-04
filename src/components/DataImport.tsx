@@ -42,7 +42,6 @@ function DataImport() {
       if (sheet) {
         // Get all rows from the sheet
         const allRows = utils.sheet_to_json(sheet);
-
         // Filter out completely empty rows and only keep columns A to D
         const filteredRows = allRows.filter((row) => {
           // Check if any property in the row has a value
@@ -145,37 +144,25 @@ function DataImport() {
 
   const checkForMatches = (data: any[]) => {
     const validations = {
-      buildings: [
-        "edwards",
-        "holland",
-        "peterson",
-        "wade",
-        "carter"
-      ],
-      rooms: [
-        "A",
-        "B",
-        "C",
-        "D"
-      ]
-    }
+      buildings: ["edwards", "holland", "peterson", "wade", "carter"],
+      rooms: ["A", "B", "C", "D"],
+    };
     const err = {
       suite: "",
       room: "",
       building: "",
     };
-
+  
     // Filtrar solo las filas que tienen datos válidos en las columnas esperadas
     const validRows = data.filter((row) => {
       const hasRequiredFields =
         row.Name || row.Building || row.Suite || row.Room;
       const containsValidationRules = Object.values(row).some(
-        (value) =>
-          typeof value === "string" && value.includes("VALIDATION RULES")
+        (value) => typeof value === "string" && value.includes("VALIDATION RULES")
       );
       return hasRequiredFields && !containsValidationRules;
     });
-
+  
     // Check for room matches (red highlight)
     const roomMatches = validRows.filter((row) => {
       const rowNum = row.__rowNum_;
@@ -183,37 +170,36 @@ function DataImport() {
         ? row.Building.toString().toLowerCase()
         : "";
       
-      // Convert row.Suite to string consistently
-      const suiteStr = row.Suite ? row.Suite.toString().trim() : "";
-      
-      // Check if suite is invalid
-      if (!suiteStr || suiteStr.length === 0 || suiteStr.length !== 3 || isNaN(Number(suiteStr))) {
-        err.suite =
-          "It seems that a suite field is invalid (see row " + rowNum + ")";
-      } else if (!row.Room || row.Room.toString().trim().length !== 1 || 
-                validations.rooms.indexOf(row.Room.toString().trim()) === -1) {
-        err.room =
-          "It seems that a room field is empty (see row " + rowNum + ")";
-      } else if (!buildingLower || buildingLower.length === 0 || 
-                validations.buildings.indexOf(buildingLower) === -1) {
-        err.building =
-          "It seems that a building field is invalid (see row " + rowNum + ")";
-      }
-
-      if (
-        err.suite.length > 0 ||
-        err.room.length > 0 ||
-        err.building.length > 0
+      // Suite ya es un número
+      const suiteNumber = row.Suite ? parseInt(row.Suite, 10) : NaN;
+  
+      // Validar suite, room y building
+      if (isNaN(suiteNumber) || suiteNumber.toString().length !== 3) {
+        err.suite = "It seems that a suite field is invalid (see row " + rowNum + ")";
+      } else if (
+        !row.Room ||
+        row.Room.toString().trim().length !== 1 ||
+        validations.rooms.indexOf(row.Room.toString().trim()) === -1
       ) {
+        err.room = "It seems that a room field is empty (see row " + rowNum + ")";
+      } else if (
+        !buildingLower ||
+        buildingLower.length === 0 ||
+        validations.buildings.indexOf(buildingLower) === -1
+      ) {
+        err.building = "It seems that a building field is invalid (see row " + rowNum + ")";
+      }
+  
+      if (err.suite.length > 0 || err.room.length > 0 || err.building.length > 0) {
         toast.error(err.suite + " " + err.room + " " + err.building);
         setPreviewData([]);
         setSelectedSheet("");
         return false;
       }
-
+  
       return rooms.some(
         (room) =>
-          room.suiteNumber === suiteStr && // Compare with string
+          room.suiteNumber === suiteNumber && // Comparación directa con número
           room.letter.trim() === row.Room &&
           room.building.toLowerCase() === buildingLower &&
           room.students &&
@@ -221,12 +207,13 @@ function DataImport() {
           room.students[0].id !== null
       );
     });
-
+  
+  
     // Check for name matches (yellow highlight)
     const nameMatches = validRows.filter((row) => {
       if (!row.Name) return false;
       
-      const suiteStr = row.Suite ? row.Suite.toString().trim() : "";
+      const suiteNumber = row.Suite ? parseInt(row.Suite, 10) : NaN;
       
       return rooms.some(
         (room) =>
@@ -235,69 +222,65 @@ function DataImport() {
             (student) =>
               student.name &&
               student.name.toLowerCase() === row.Name.toLowerCase() &&
-              room.suiteNumber === suiteStr // Compare with string
+              room.suiteNumber === suiteNumber // Comparación directa con número
           )
       );
     });
-
+  
     setMatchingStudents(roomMatches);
     setMatchingNames(nameMatches);
-
+    
     const initialSelections: Record<string, string> = {};
     const initialExpandedRows: Record<string, boolean> = {};
     roomMatches.forEach((match) => {
       const buildingLower = match.Building.toString().toLowerCase();
-      const suiteStr = match.Suite ? match.Suite.toString().trim() : "";
-      
+      const suiteNumber = parseInt(match.Suite, 10);
+  
       const isAlsoNameMatch = nameMatches.some(
         (nameMatch) =>
-          nameMatch.Suite.toString().trim() === suiteStr &&
+          parseInt(nameMatch.Suite, 10) === suiteNumber &&
           nameMatch.Room === match.Room &&
           nameMatch.Building.toLowerCase() === buildingLower &&
           nameMatch.Name.toLowerCase() === match.Name.toLowerCase()
       );
-      
+  
       if (!isAlsoNameMatch) {
-        const roomKey = `${buildingLower}-${suiteStr}-${match.Room}`;
+        const roomKey = `${buildingLower}-${suiteNumber}-${match.Room}`;
         initialExpandedRows[roomKey] = true;
         const matchedRoom = rooms.find(
           (room) =>
-            room.suiteNumber === suiteStr && // Compare with string
+            room.suiteNumber === suiteNumber && // Comparación directa con número
             room.letter.trim() === match.Room &&
             room.building.toLowerCase() === buildingLower
         );
-        
-        if (
-          matchedRoom &&
-          matchedRoom.students &&
-          matchedRoom.students.length > 0
-        ) {
+  
+        if (matchedRoom && matchedRoom.students && matchedRoom.students.length > 0) {
           const existingRoomKey = Object.keys(initialSelections).find((key) => {
             const [keyBuilding, keySuite, keyRoom] = key.split("-");
             return (
               keyBuilding === buildingLower &&
-              keySuite === suiteStr && // Compare with string
+              parseInt(keySuite, 10) === suiteNumber &&
               keyRoom === match.Room
             );
           });
-          
+  
           const stdIndexes = selectedPreview?.rows
             .map((row, index) => {
               const rowBuildingLower = row.Building
                 ? row.Building.toString().toLowerCase()
                 : "";
-              const rowSuiteStr = row.Suite ? row.Suite.toString().trim() : "";
+              const rowSuiteNumber = parseInt(row.Suite, 10);
               const isNameMatch = nameMatches.some(
                 (nameMatch) =>
                   nameMatch.Building.toLowerCase() === rowBuildingLower &&
-                  nameMatch.Suite.toString().trim() === rowSuiteStr &&
+                  parseInt(nameMatch.Suite, 10) === rowSuiteNumber &&
                   nameMatch.Room === row.Room &&
                   nameMatch.Name.toLowerCase() === row.Name.toLowerCase()
               );
-              
+  
               if (
                 rowBuildingLower === matchedRoom.building.toLowerCase() &&
-                rowSuiteStr === matchedRoom.suiteNumber && // Compare with string
+                rowSuiteNumber === matchedRoom.suiteNumber &&
                 row.Room === matchedRoom.letter &&
                 !isNameMatch
               ) {
@@ -306,7 +289,7 @@ function DataImport() {
               return undefined;
             })
             .filter((index) => index !== undefined);
-            
+  
           if (existingRoomKey && matchedRoom.students.length === 2) {
             const existingSelection = initialSelections[existingRoomKey];
             const otherStudent = matchedRoom.students.find(
@@ -318,22 +301,21 @@ function DataImport() {
             }
           } else {
             if (matchedRoom.students.length === 1 && existingRoomKey) {
-              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[1]}`] =
-                "-1";
+              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[1]}`] = "-1";
             } else {
               initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] =
-                matchedRoom.students[0].id;
+                "-1"
             }
           }
         }
       }
     });
-
-    setStudentSelections(initialSelections);
+    setStudentSelections(initialSelections);  
     setExpandedRows(initialExpandedRows);
-
+  
     return roomMatches.length > 0;
   };
+  
 
   const toggleExpandedRow = useCallback(
     (roomKey: string) => {
@@ -393,7 +375,7 @@ function DataImport() {
   const handleStudentSelection = useCallback(
     (roomKey: string, studentId: string, rowIndex: number) => {
       const [building, suite, room] = roomKey.split("-");
-      const studentsInRoom = getStudentsForRoom(building, suite, room);
+      const studentsInRoom = getStudentsForRoom(building, Number(suite), room);
       if (studentsInRoom.length === 1) {
         studentsInRoom.push({
           id: "-1",
@@ -427,10 +409,10 @@ function DataImport() {
   );
 
   const getStudentsForRoom = useCallback(
-    (building: string, suite: string, room: string) => {
+    (building: string, suite: number, room: string) => {
       const matchedRoom = rooms.find(
         (r) =>
-          r.suiteNumber === suite.toString().trim() &&
+          r.suiteNumber === suite &&
           r.letter.trim() === room &&
           r.building === building.trim().toLowerCase()
       );
@@ -747,9 +729,10 @@ function DataImport() {
                       }
   
                       const roomKey = `${buildingLower}-${row.Suite}-${row.Room}`; // Usar building en minúsculas
+                      
                       const studentsInRoom =
                         isRoomMatching && !isNameMatching
-                          ? getStudentsForRoom(buildingLower, row.Suite, row.Room) // Pasar building en minúsculas
+                          ? getStudentsForRoom(buildingLower, parseInt(row.Suite, 10), row.Room) // Pasar building en minúsculas
                           : [];
                       return (
                         <>

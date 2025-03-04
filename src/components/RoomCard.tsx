@@ -185,7 +185,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                 </motion.button>
               </div>
               <div className="space-y-4">
-                {(room.students[0].id === null && room.students.length === 1) ? (
+                {(!room.students[0] || (room.students[0].id === null && room.students.length === 1)) ? (
                   <div>{t.noStudents}</div>
                 ) : (
                   room.students.map((student) => {

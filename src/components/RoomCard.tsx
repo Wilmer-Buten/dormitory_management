@@ -61,8 +61,11 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   });
 
   const handleAddStudent = () => {
-    if (room.students.length > 1) {
-      toast.error("Room is full");
+    // Verificar si alguno de los esudiantes tiene ID null
+    const hasNullStudent = room.students.some(student => student.id === null);
+    console.log(hasNullStudent);
+    if ((room.students.length === 2 && !hasNullStudent) || (room.students.length > 2 && hasNullStudent)) {
+      toast.error(t.roomIsFull);
       return;
     }
     setIsAddingStudent(true);
@@ -222,7 +225,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                               whileTap={{ scale: 0.95 }}
                               onClick={() =>
                               {
-                                console.log(student.inRoom);
+                                console.log(student);
                                 (student.inRoom === false || student.inRoom === 0 || student.inRoom === null) && mutation.mutate({
                                   roomId: room.id,
                                   studentId: student.id,
@@ -347,7 +350,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                       onClick={handleSaveNewStudent}
                       className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
                     >
-                      Guardar
+                     { t.common.save }
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
@@ -355,7 +358,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                       onClick={handleCancelAddStudent}
                       className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                     >
-                      Cancelar
+                      {t.common.cancel}
                     </motion.button>
                   </div>
                 </div>

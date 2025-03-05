@@ -199,8 +199,9 @@ export const addStudent = async (req, res) => {
         name: name,
         room_id: roomId,
         isPresent: null,
+        inRoom: null,
         lastCheckedBy: null,
-        lastCheckedAt: null,
+        lastCheckedAt: null
       },
     });
   } catch (error) {

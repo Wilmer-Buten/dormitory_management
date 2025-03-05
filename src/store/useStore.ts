@@ -114,7 +114,7 @@ export const useStore = create<Store>((set, get) => ({
   setSelectedDate: (date) => {set({ selectedDate: date, selectedStat: 'all', searchQuery: '' })},
   setAccessToken: (accessToken) => set({ accessToken: accessToken }),
   setCurrentUser: (user) => set({ currentUser: user }),
-  setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '' }),
+  setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '', currentPage: 1 }),
   setSelectedSuite: (suiteId) => set({ selectedSuite: suiteId }),
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
@@ -291,7 +291,8 @@ export const useStore = create<Store>((set, get) => ({
         toast.error('Error creating user');
         throw new Error('Error creating user: ' + data.message);
       }
-      set({ users: [...get().users, user], isLoading: false });
+      const userBuildingId = user.building === 'edwards' ? 1 : user.building === 'holland' ? 2 : user.building === 'peterson' ? 3 : user.building === 'wade' ? 4 : 5;
+      set({ users: [...get().users, { ...user, building_id: userBuildingId }], isLoading: false });
       toast.success('User created successfully');
       return data;
     } catch (error: any) {
@@ -381,19 +382,21 @@ export const useStore = create<Store>((set, get) => ({
   addStudent: async (roomId: string, studentName: String) => {
     const currentUser = get().currentUser;
     if (!currentUser) return;
-    set({ isLoading: true });
+    // set({ isLoading: true });
+    toast.loading(get().getTranslation().students.addingStudent + '...', { id: 'add-student' });
     try {
       const response = await fetch(`${API_URL}/students/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: studentName,
-          roomId,
+          roomId
         })
       });
       const data = await response.json();
       if (!response.ok) throw new Error('Failed to add student');
 
+      console.log(data.student);
       set((state) => ({
         rooms: state.rooms.map((room ) => {
           if (room.id === Number(roomId)) {
@@ -402,7 +405,8 @@ export const useStore = create<Store>((set, get) => ({
           return room;
         }),
       }));
-      toast.success('Student added successfully');
+      toast.dismiss('add-student');
+      toast.success('Student added successfully', { id: 'add-student' });
     } catch (error) {
       toast.error('Failed to add student');
     }

@@ -60,6 +60,7 @@ export interface Translation {
   building: string;
   verifiedBy: string;
   noStudents: string;
+  roomIsFull: string;
   profile: string; 
   buildings: {
     all: string;
@@ -90,6 +91,7 @@ export interface Translation {
     subtitle: string;
     success: string;
     error: string;
+    columnError: string;
     confirm: {
       title: string;
       description: string;
@@ -122,6 +124,7 @@ export interface Translation {
   students: {
     delete: string;
     deleteConfirm: string;
+    addingStudent: string;
   };
   users: {
     title: string;

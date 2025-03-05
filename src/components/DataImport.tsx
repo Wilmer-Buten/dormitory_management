@@ -19,7 +19,7 @@ import type { PreviewData } from "../types";
 import ModalComponent from "./ModalComponent";
 
 function DataImport() {
-  const { getTranslation, importStudents, rooms, isLoading } = useStore();
+  const { getTranslation, importStudents, rooms, isLoading, currentUser } = useStore();
   const t = getTranslation();
   const [dragActive, setDragActive] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData[]>([]);
@@ -39,25 +39,47 @@ function DataImport() {
       const preview: PreviewData[] = [];
       const sheetName = "Students";
       const sheet = workbook.Sheets[sheetName];
+  
       if (sheet) {
-        // Get all rows from the sheet
         const allRows = utils.sheet_to_json(sheet);
-        // Filter out completely empty rows and only keep columns A to D
-        const filteredRows = allRows.filter((row) => {
-          // Check if any property in the row has a value
-          return Object.values(row).some(
-            (value) =>
-              value !== null &&
-              value !== undefined &&
-              value !== "" &&
-              !(typeof value === "string" && value.trim() === "")
+  
+        // Verificar si las columnas requeridas existen en la primera fila
+        if (
+          allRows.length === 0 ||
+          !["Name", "Building", "Suite", "Room"].every((key) =>
+            Object.keys(allRows[0]).includes(key)
+          )
+        ) {
+          throw new Error(
+            toast.error(
+              t.import.columnError
+            )
           );
-        }).map(row => {
-          // Only keep the first 4 columns (A to D)
-          const { Name, Building, Suite, Room } = row as any;
-          return { Name, Building, Suite, Room };
-        });
-
+        }
+  
+        // Filtrar filas vacías y mapear datos
+        const currentUserBuilding = currentUser?.building_id === 1 ? 'edwards' : currentUser?.building_id === 2 ? 'holland' : currentUser?.building_id === 3 ? 'peterson' : currentUser?.building_id === 4 ? 'wade' : 'all';
+        const filteredRows = allRows
+          .filter((row) =>
+            Object.values(row as any).some(
+              (value) =>
+                value !== null &&
+                value !== undefined &&
+                value !== "" &&
+                !(typeof value === "string" && value.trim() === "")
+            )
+          ).filter((row: any)=> {
+            if(row.Building.toLowerCase() === currentUserBuilding)
+            {
+              return true;
+            }
+            toast.error("Registro ignorado (no pertenece a su edificio): " + row.Name);
+            return false;
+          })
+          .map((row) => {
+            const { Name, Building, Suite, Room } = row as any;
+            return { Name, Building, Suite, Room };
+          });
         const headers =
           filteredRows.length > 0 ? Object.keys(filteredRows[0]) : [];
         preview.push({
@@ -70,10 +92,12 @@ function DataImport() {
         });
       } else {
         throw new Error(
-          "The 'Students' sheet was not found in the workbook. Please make sure your Excel file contains a sheet named 'Students'."
+          toast.error(
+            "The 'Students' sheet was not found in the workbook. Please make sure your Excel file contains a sheet named 'Students'."
+          )
         );
       }
-
+  
       setPreviewData(preview);
       if (preview.length > 0) {
         setSelectedSheet(preview[0].sheet);
@@ -82,6 +106,7 @@ function DataImport() {
       toast.error(t.import.error);
     }
   };
+  
 
   useEffect(() => {
     if (previewData.length > 0 && selectedSheet) {
@@ -300,11 +325,11 @@ function DataImport() {
                 otherStudent.id;
             }
           } else {
-            if (matchedRoom.students.length === 1 && existingRoomKey) {
-              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[1]}`] = "-1";
+            if (matchedRoom.students.length === 1 && !existingRoomKey) {
+              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] = "-1";
             } else {
               initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] =
-                "-1"
+                matchedRoom.students[0].id;
             }
           }
         }

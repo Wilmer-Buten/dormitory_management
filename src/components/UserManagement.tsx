@@ -252,6 +252,8 @@ function UserManagement() {
         return "Peterson Hall"
       case 4:
         return "Wade Hall"
+      case 5:
+        return "Carter Hall"
       default:
         return "All Buildings"
     }

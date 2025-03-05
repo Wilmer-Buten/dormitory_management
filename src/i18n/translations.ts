@@ -16,6 +16,7 @@ export const translations = {
     verifiedBy: 'Verified by',
     noStudents: 'No students',
     profile: 'Profile',
+    roomIsFull: 'Room is full',
     forbidden: 'You are not authorized to perform this action',
     buildings: {
       edwards: 'Edwards Hall',
@@ -47,6 +48,7 @@ export const translations = {
       subtitle: 'Upload your Excel file with students, rooms, and suites data',
       success: 'Data imported successfully',
       error: 'Error importing data. Please check your file format',
+      columnError: 'One or more required columns are missing from the \'Students\' sheet. Please make sure the sheet contains the following columns: Name, Building, Suite, Room.',
       confirm: {
         title: 'Confirm Import',
         description: 'students match existing records. If you proceed, their data will be overwritten. Are you sure you want to continue?',
@@ -86,7 +88,8 @@ export const translations = {
     students: {
       delete: 'Delete Student',
       deleteConfirm: 'Are you sure you want to delete this student?',
-      deleteConfirmButton: 'Confirm Deletion'
+      deleteConfirmButton: 'Confirm Deletion',
+      addingStudent: 'Adding Student'
     },
     users: {
       title: 'User Management',
@@ -147,6 +150,7 @@ export const translations = {
     verifiedBy: 'Verificado por',
     noStudents: 'No hay estudiantes',
     profile: 'Perfil',
+    roomIsFull: 'La habitación está llena',
     forbidden: 'No tienes autorización para realizar esta acción',
     buildings: {
       all: 'Todos los Edificios',
@@ -178,6 +182,7 @@ export const translations = {
       subtitle: 'Sube tu archivo Excel con datos de estudiantes, habitaciones y suites',
       success: 'Datos importados exitosamente',
       error: 'Error al importar datos. Por favor verifica el formato del archivo',
+      columnError: 'Una o más columnas requeridas no están presentes en la hoja \'Estudiantes\' o están mal escritas. Por favor asegúrate de que la hoja contenga las siguientes columnas: Name, Building, Suite, Room.',
       confirm: {
         title: 'Confirmar Importación',
         description: 'estudiantes coinciden con los registros existentes. Si continúas, sus datos serán sobrescritos. ¿Estás seguro de que quieres continuar?',
@@ -217,7 +222,8 @@ export const translations = {
     students: {
       delete: 'Eliminar Estudiante',
       deleteConfirm: '¿Estás seguro de que quieres eliminar este estudiante?',
-      deleteConfirmButton: 'Confirmar Eliminación'
+      deleteConfirmButton: 'Confirmar Eliminación',
+      addingStudent: 'Añadiendo Estudiante'
     },
     users: {
       title: 'Gestión de Usuarios',
@@ -278,6 +284,7 @@ export const translations = {
     verifiedBy: 'Vérifié par',
     noStudents: 'Pas d\'étudiants',
     profile: 'Profil',
+    roomIsFull: 'La chambre est pleine',
     forbidden: 'Vous n\'êtes pas autorisé à effectuer cette action',
     buildings: {
       all: 'Tous les Bâtiments',
@@ -308,6 +315,7 @@ export const translations = {
       subtitle: 'Téléchargez votre fichier Excel avec les données des étudiants, des chambres et des suites',
       success: 'Données importées avec succès',
       error: 'Erreur lors de l\'importation des données. Veuillez vérifier le format du fichier',
+      columnError: 'Une ou plusieurs colonnes requises sont manquantes dans la feuille \'Étudiants\'. Veuillez vous assurer que la feuille contient les colonnes suivantes: Name, Building, Suite, Room.',
       confirm: {
         title: 'Confirmer l\'importation',
         description: 'étudiants correspondent aux enregistrements existants. Si vous continuez, leurs données seront écrasées. Êtes-vous sûr de vouloir continuer?',
@@ -348,7 +356,8 @@ export const translations = {
     students: {
       delete: 'Supprimer Étudiant',
       deleteConfirm: 'Êtes-vous sûr de vouloir supprimer cet étudiant?',
-      deleteConfirmButton: 'Confirmer la Suppression'
+      deleteConfirmButton: 'Confirmer la Suppression',
+      addingStudent: 'Ajout d\'un étudiant'
     },
     users: {
       title: 'Gestion des Utilisateurs',

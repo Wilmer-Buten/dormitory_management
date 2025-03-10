@@ -73,7 +73,7 @@ function DataImport() {
             {
               return true;
             }
-            toast.error("Registro ignorado (no pertenece a su edificio): " + row.Name);
+            toast.error(t.import.ignoredRecord + ": " + row.Name);
             return false;
           })
           .map((row) => {
@@ -195,7 +195,6 @@ function DataImport() {
         ? row.Building.toString().toLowerCase()
         : "";
       
-      // Suite ya es un número
       const suiteNumber = row.Suite ? parseInt(row.Suite, 10) : NaN;
   
       // Validar suite, room y building
@@ -224,7 +223,7 @@ function DataImport() {
   
       return rooms.some(
         (room) =>
-          room.suiteNumber === suiteNumber && // Comparación directa con número
+          room.suiteNumber === suiteNumber &&
           room.letter.trim() === row.Room &&
           room.building.toLowerCase() === buildingLower &&
           room.students &&
@@ -247,7 +246,7 @@ function DataImport() {
             (student) =>
               student.name &&
               student.name.toLowerCase() === row.Name.toLowerCase() &&
-              room.suiteNumber === suiteNumber // Comparación directa con número
+              room.suiteNumber === suiteNumber
           )
       );
     });
@@ -274,7 +273,7 @@ function DataImport() {
         initialExpandedRows[roomKey] = true;
         const matchedRoom = rooms.find(
           (room) =>
-            room.suiteNumber === suiteNumber && // Comparación directa con número
+            room.suiteNumber === suiteNumber &&
             room.letter.trim() === match.Room &&
             room.building.toLowerCase() === buildingLower
         );
@@ -350,7 +349,7 @@ function DataImport() {
         [roomKey]: !prev[roomKey],
       }));
     },
-    [expandedRows] // Removed studentSelections from dependencies
+    [expandedRows] 
   );
 
   const importData = useCallback(async () => {
@@ -430,7 +429,7 @@ function DataImport() {
       }
       setStudentSelections(newSelections);
     },
-    [expandedRows, studentSelections] // Removed getStudentsForRoom from dependencies
+    [expandedRows, studentSelections] 
   );
 
   const getStudentsForRoom = useCallback(
@@ -462,7 +461,7 @@ function DataImport() {
       // Show loading toast
       toast.loading("Generating template...", { id: "download-template" });
 
-      // Make API request to the backend endpoint
+  
       const response = await fetch(
         import.meta.env.VITE_API_URL + "/excel/template"
       );
@@ -476,7 +475,7 @@ function DataImport() {
     } catch (error) {
       toast.error("Failed to download template", { id: "download-template" });
     }
-  }, []); // Added getTemplateExcel dependency
+  }, [])
 
   const downloadTemplateExcel = useCallback(async () => {
     try {
@@ -489,7 +488,7 @@ function DataImport() {
           // Create a temporary link element to trigger the download
           const link = document.createElement("a");
           link.href = url;
-          link.download = "student_import_template_with_validation.xlsx"; // Match the filename from backend
+          link.download = "student_import_template_with_validation.xlsx";
           document.body.appendChild(link);
           link.click();
 
@@ -658,7 +657,7 @@ function DataImport() {
       ) : (
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <TableIcon className="text-gray-400" size={24} />
                 <div>
@@ -668,11 +667,11 @@ function DataImport() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                 <select
                   value={selectedSheet}
                   onChange={(e) => setSelectedSheet(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto"
                 >
                   {previewData.map((preview) => (
                     <option key={preview.sheet} value={preview.sheet}>
@@ -680,7 +679,7 @@ function DataImport() {
                     </option>
                   ))}
                 </select>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mx-auto">
                   <button
                     onClick={handleCancel}
                     className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
@@ -736,7 +735,7 @@ function DataImport() {
                         (match) =>
                           match.Suite === row.Suite&&
                           match.Room === row.Room &&
-                          match.Building.toLowerCase() === buildingLower // Comparar en minúsculas
+                          match.Building.toLowerCase() === buildingLower 
                       );
   
                       const isNameMatching = matchingNames.some(
@@ -753,11 +752,11 @@ function DataImport() {
                         rowClass = "bg-red-300";
                       }
   
-                      const roomKey = `${buildingLower}-${row.Suite}-${row.Room}`; // Usar building en minúsculas
+                      const roomKey = `${buildingLower}-${row.Suite}-${row.Room}`;
                       
                       const studentsInRoom =
                         isRoomMatching && !isNameMatching
-                          ? getStudentsForRoom(buildingLower, parseInt(row.Suite, 10), row.Room) // Pasar building en minúsculas
+                          ? getStudentsForRoom(buildingLower, Number.parseInt(row.Suite, 10), row.Room) 
                           : [];
                       return (
                         <>
@@ -892,6 +891,8 @@ function DataImport() {
       )}
     </div>
   );
+
+
 }
 
 export default DataImport;

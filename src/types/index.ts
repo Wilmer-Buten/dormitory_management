@@ -92,6 +92,7 @@ export interface Translation {
     success: string;
     error: string;
     columnError: string;
+    ignoredRecord: string;
     confirm: {
       title: string;
       description: string;

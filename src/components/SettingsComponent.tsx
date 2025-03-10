@@ -68,6 +68,7 @@ export function SettingsComponent() {
               {t.settings.light}
             </button>
             <button
+              disabled
               onClick={() => setTheme('dark')}
               className={`p-4 rounded-lg border ${
                 theme === 'dark'

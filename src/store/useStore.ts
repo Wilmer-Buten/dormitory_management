@@ -119,7 +119,7 @@ export const useStore = create<Store>((set, get) => ({
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme: theme }),
-  setCurrentSection: (section) => set({ currentSection: section }),
+  setCurrentSection: (section) => set({ currentSection: section, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' }),
   setSelectedBuilding: (building) => {
     const currentUserBuildingId = get().currentUser?.building_id;
     if (currentUserBuildingId === null || currentUserBuildingId === 5) {
@@ -172,7 +172,11 @@ export const useStore = create<Store>((set, get) => ({
         },
         isAuthenticated: true,
         accessToken: data.accessToken,
-        isLoading: false
+        isLoading: false,
+        searchQuery: '',
+        viewMode: 'rooms',
+        selectedStat: 'all',
+        currentPage: 1
       });
     } catch (error) {
       throw error;
@@ -201,7 +205,8 @@ export const useStore = create<Store>((set, get) => ({
           rooms: [],
           users: [],
           currentPage: 1,
-          isLoading: false
+          isLoading: false,
+          searchQuery: ''
         });
         localStorage.removeItem('isAuthenticated');
 
@@ -211,18 +216,6 @@ export const useStore = create<Store>((set, get) => ({
     } catch (error) {
       toast.error('Error logging out');
     }
-    set({
-      currentUser: null,
-      isAuthenticated: false,
-      currentSection: 'dashboard',
-      accessToken: '',
-      viewMode: 'rooms',
-      selectedSuite: null,
-      enableFetchRoomsQuery: true,
-      rooms: [],
-      users: [],
-      currentPage: 1
-    });
   },
   
   getFilteredRooms: () => {
@@ -235,11 +228,11 @@ export const useStore = create<Store>((set, get) => ({
       
       // Building filter
       if (selectedBuilding !== 'all' && room.building !== selectedBuilding) return false;
-      
       // Search filter
       if (searchQuery) {
         const searchLower = searchQuery.toLowerCase();
         const matchesSearch = room.building.toLowerCase().includes(searchLower) ||
+          room.suiteNumber.toString().includes(searchLower) ||
           room.students.some((student) => student.name?.toLowerCase().includes(searchLower));
         if (!matchesSearch) return false;
       }
@@ -396,7 +389,6 @@ export const useStore = create<Store>((set, get) => ({
       const data = await response.json();
       if (!response.ok) throw new Error('Failed to add student');
 
-      console.log(data.student);
       set((state) => ({
         rooms: state.rooms.map((room ) => {
           if (room.id === Number(roomId)) {

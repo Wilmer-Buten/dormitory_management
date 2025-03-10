@@ -49,6 +49,7 @@ export const translations = {
       success: 'Data imported successfully',
       error: 'Error importing data. Please check your file format',
       columnError: 'One or more required columns are missing from the \'Students\' sheet. Please make sure the sheet contains the following columns: Name, Building, Suite, Room.',
+      ignoredRecord: 'Ignored record. This student does not belong to your building.',
       confirm: {
         title: 'Confirm Import',
         description: 'students match existing records. If you proceed, their data will be overwritten. Are you sure you want to continue?',
@@ -183,6 +184,7 @@ export const translations = {
       success: 'Datos importados exitosamente',
       error: 'Error al importar datos. Por favor verifica el formato del archivo',
       columnError: 'Una o más columnas requeridas no están presentes en la hoja \'Estudiantes\' o están mal escritas. Por favor asegúrate de que la hoja contenga las siguientes columnas: Name, Building, Suite, Room.',
+      ignoredRecord: "Registro ignorado (no pertenece a su edificio)",
       confirm: {
         title: 'Confirmar Importación',
         description: 'estudiantes coinciden con los registros existentes. Si continúas, sus datos serán sobrescritos. ¿Estás seguro de que quieres continuar?',
@@ -316,6 +318,7 @@ export const translations = {
       success: 'Données importées avec succès',
       error: 'Erreur lors de l\'importation des données. Veuillez vérifier le format du fichier',
       columnError: 'Une ou plusieurs colonnes requises sont manquantes dans la feuille \'Étudiants\'. Veuillez vous assurer que la feuille contient les colonnes suivantes: Name, Building, Suite, Room.',
+      ignoredRecord: 'Enregistrement ignoré (n\'appartient pas à votre bâtiment)',
       confirm: {
         title: 'Confirmer l\'importation',
         description: 'étudiants correspondent aux enregistrements existants. Si vous continuez, leurs données seront écrasées. Êtes-vous sûr de vouloir continuer?',

@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useMemo, useState, useCallback } from "react"
+import React, { useMemo, useState, useCallback, useEffect } from "react"
 import { useStore } from "../store/useStore"
-import { UserPlus, Search, Mail, Key, UserIcon, Loader2, Plus, X } from "lucide-react"
+import { UserPlus, Search, Mail, Key, UserIcon, Loader2, Plus, X, Shield, Building2, Pencil } from "lucide-react"
 import { Toaster } from "react-hot-toast"
 import { useQuery } from "@tanstack/react-query"
-import type { Translation, User } from "../types"
+import type { Building, Translation, User } from "../types"
 import { EditUserModal } from "./EditUserModal"
 
 // Componente para el formulario de creación
@@ -14,20 +14,34 @@ const CreateUserForm = React.memo(
     onSubmit,
     onCancel,
     t,
+    buildings,
+    isSupervisor,
+    ownBuildingName,
   }: {
     onSubmit: (formData: User) => void
     onCancel: () => void
     t: Translation
+    buildings: Building[]
+    isSupervisor: boolean
+    ownBuildingName: string
   }) => {
     const [formData, setFormData] = useState({
+      email: "",
       username: "",
       password: "",
       confirmPassword: "",
       name: "",
-      role: "staff" as "admin" | "staff",
-      building: "edwards",
+      lastname: "",
+      role: "staff" as "admin" | "supervisor" | "staff",
+      building: buildings[0]?.name || "",
     })
     const [passwordError, setPasswordError] = useState("")
+
+    useEffect(() => {
+      if (!formData.building && buildings.length > 0) {
+        setFormData((prev) => ({ ...prev, building: buildings[0].name }))
+      }
+    }, [buildings, formData.building])
 
     const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target
@@ -47,60 +61,94 @@ const CreateUserForm = React.memo(
           return
         }
 
-        const { confirmPassword, ...submitData } = formData
-        onSubmit(submitData)
+        const { confirmPassword, username, lastname, ...rest } = formData
+        onSubmit({
+          ...rest,
+          username: username.trim() ? username.trim() : undefined,
+          lastname: lastname.trim() ? lastname.trim() : undefined,
+        })
       },
       [formData, onSubmit],
     )
 
     return (
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-6">{t.users.createNew}</h2>
+      <div className="card p-5 sm:p-6 mb-6 animate-slide-up">
+        <h2 className="text-lg font-semibold text-slate-900 mb-5">{t.users.createNew}</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.email}</label>
+              <label className="label">{t.users.email}</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="email"
-                  name="username"
-                  value={formData.username}
+                  name="email"
+                  value={formData.email}
                   onChange={handleInputChange}
-                  className="pl-10 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="email@example.com"
+                  className="input input-icon"
+                  placeholder="jdoe@example.com"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.name}</label>
+              <label className="label">{t.users.username}</label>
               <div className="relative">
-                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  className="input input-icon"
+                  placeholder="e.g. jdoe (optional)"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">{t.users.name}</label>
+              <div className="relative">
+                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="pl-10 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="John Doe"
+                  className="input input-icon"
+                  placeholder="John"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.password}</label>
+              <label className="label">{t.users.lastname}</label>
               <div className="relative">
-                <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  name="lastname"
+                  value={formData.lastname}
+                  onChange={handleInputChange}
+                  className="input input-icon"
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">{t.users.password}</label>
+              <div className="relative">
+                <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="password"
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="pl-10 w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="input input-icon"
                   placeholder="••••••••"
                   required
                 />
@@ -108,68 +156,78 @@ const CreateUserForm = React.memo(
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm {t.users.password}</label>
+              <label className="label">Confirm {t.users.password}</label>
               <div className="relative">
-                <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="password"
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`pl-10 w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    passwordError ? "border-red-500" : "border-gray-300"
-                  }`}
+                  className={`input input-icon ${passwordError ? "border-red-400 focus:ring-red-400/30" : ""}`}
                   placeholder="••••••••"
                   required
                 />
               </div>
-              {passwordError && <p className="mt-1 text-sm text-red-500">{passwordError}</p>}
+              {passwordError && <p className="mt-1.5 text-sm text-red-500">{passwordError}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.role}</label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="admin">{t.users.roles.admin}</option>
-                <option value="staff">{t.users.roles.staff}</option>
-              </select>
+              <label className="label">{t.users.role}</label>
+              {isSupervisor ? (
+                <div className="input bg-slate-50 text-slate-500 cursor-not-allowed">{t.users.roles.staff}</div>
+              ) : (
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleInputChange}
+                  className="input"
+                  required
+                >
+                  <option value="admin">{t.users.roles.admin}</option>
+                  <option value="supervisor">{t.users.roles.supervisor}</option>
+                  <option value="staff">{t.users.roles.staff}</option>
+                </select>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.users.building}</label>
-              <select
-                name="building"
-                value={formData.building}
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="edwards">{t.buildings.edwards}</option>
-                <option value="holland">{t.buildings.holland}</option>
-                <option value="peterson">{t.buildings.peterson}</option>
-                <option value="wade">{t.buildings.wade}</option>
-              </select>
+              <label className="label">{t.users.building}</label>
+              {isSupervisor ? (
+                <div className="input bg-slate-50 text-slate-500 cursor-not-allowed">
+                  {ownBuildingName.charAt(0).toUpperCase() + ownBuildingName.slice(1)}
+                </div>
+              ) : (
+                <select
+                  name="building"
+                  value={formData.building}
+                  onChange={handleInputChange}
+                  className="input"
+                  required
+                >
+                  {buildings.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name.charAt(0).toUpperCase() + b.name.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-1">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="btn-secondary btn-md text-sm"
             >
               {t.common.cancel}
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              className="btn-primary btn-md text-sm"
             >
-              <UserPlus size={20} />
+              <UserPlus size={18} />
               {t.users.create}
             </button>
           </div>
@@ -179,7 +237,26 @@ const CreateUserForm = React.memo(
   },
 )
 
-// Componente para la tabla de usuarios
+const ROLE_LABELS: Record<string, (t: any) => string> = {
+  admin: (t) => t.users.roles.admin,
+  supervisor: (t) => t.users.roles.supervisor,
+  staff: (t) => t.users.roles.staff,
+}
+
+const ROLE_STYLES: Record<string, string> = {
+  admin: "bg-purple-50 text-purple-700",
+  supervisor: "bg-indigo-50 text-indigo-700",
+  staff: "bg-slate-100 text-slate-600",
+}
+
+const RoleBadge = ({ role, t }: { role: string; t: any }) => (
+  <span className={`badge ${ROLE_STYLES[role] ?? ROLE_STYLES.staff}`}>
+    <Shield size={12} />
+    {(ROLE_LABELS[role] ?? ROLE_LABELS.staff)(t)}
+  </span>
+)
+
+// Tabla de usuarios (desktop)
 const UsersTable = React.memo(
   ({
     users,
@@ -194,37 +271,43 @@ const UsersTable = React.memo(
     getBuildingName: (id: number | undefined) => string
     currentUser: User | null 
   }) => (
-    <table className="w-full min-w-[650px]">
+    <table className="w-full min-w-[850px]">
       <thead>
-        <tr className="text-left text-gray-500 border-b">
-          <th className="pb-4 px-2 whitespace-nowrap">{t.users.name}</th>
-          <th className="pb-4 px-2 whitespace-nowrap">{t.users.email}</th>
-          <th className="pb-4 px-2 whitespace-nowrap">{t.users.role}</th>
-          <th className="pb-4 px-2 whitespace-nowrap">{t.users.building}</th>
-          <th className="pb-4 px-2 whitespace-nowrap">{t.users.actions}</th>
+        <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.name}</th>
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.lastname}</th>
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.username}</th>
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.email}</th>
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.role}</th>
+          <th className="pb-3 px-2 whitespace-nowrap">{t.users.building}</th>
+          <th className="pb-3 px-2 whitespace-nowrap text-right">{t.users.actions}</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody className="divide-y divide-slate-100">
         {users.map((user) => (
-          <tr key={user.id} className="border-b">
-            <td className="py-4 px-2">{user.name}</td>
-            <td className="py-4 px-2">{user.username}</td>
-            <td className="py-4 px-2">{user.role}</td>
-            <td className="py-4 px-2">{getBuildingName(user.building_id)}</td>
-            <td className="py-4 px-2">
-              {user.username === currentUser?.username ? (
-                <button
-                  className="text-gray-400 cursor-not-allowed"
-                  disabled
-                >
-                  {t.users.edit}
-                </button>
+          <tr key={user.id} className={`hover:bg-slate-50/70 transition-colors ${user.active === false ? "opacity-60" : ""}`}>
+            <td className="py-3.5 px-2 font-medium text-slate-800">
+              <div className="flex items-center gap-2">
+                {user.name}
+                {user.active === false && (
+                  <span className="badge bg-slate-100 text-slate-500">{t.users.statusInactive}</span>
+                )}
+              </div>
+            </td>
+            <td className="py-3.5 px-2 text-slate-500">{user.lastname || "—"}</td>
+            <td className="py-3.5 px-2 text-slate-500">{user.username || "—"}</td>
+            <td className="py-3.5 px-2 text-slate-500">{user.email}</td>
+            <td className="py-3.5 px-2"><RoleBadge role={user.role} t={t} /></td>
+            <td className="py-3.5 px-2 text-slate-500">{getBuildingName(user.building_id)}</td>
+            <td className="py-3.5 px-2 text-right">
+              {user.id === currentUser?.id ? (
+                <span className="text-slate-300 text-sm cursor-not-allowed">{t.users.edit}</span>
               ) : (
                 <button
-                  className="text-blue-600 hover:text-blue-700"
+                  className="text-brand-600 hover:text-brand-700 font-medium text-sm inline-flex items-center gap-1"
                   onClick={() => onEdit(user)}
                 >
-                  {t.users.edit}
+                  <Pencil size={14} /> {t.users.edit}
                 </button>
               )}
             </td>
@@ -235,40 +318,98 @@ const UsersTable = React.memo(
   )
 );
 
+// Lista de usuarios en tarjetas (mobile)
+const UsersCardList = React.memo(
+  ({
+    users,
+    onEdit,
+    t,
+    getBuildingName,
+    currentUser
+  }: {
+    users: User[]
+    onEdit: (user: User) => void
+    t: any
+    getBuildingName: (id: number | undefined) => string
+    currentUser: User | null
+  }) => (
+    <div className="space-y-2.5">
+      {users.map((user) => {
+        const isSelf = user.id === currentUser?.id
+        return (
+          <div
+            key={user.id}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border border-slate-100 bg-white ${!isSelf ? "active:bg-slate-50" : ""} ${user.active === false ? "opacity-60" : ""}`}
+            onClick={() => !isSelf && onEdit(user)}
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-semibold shrink-0">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-slate-800 truncate">{[user.name, user.lastname].filter(Boolean).join(" ") || user.name}</p>
+              <p className="text-sm text-slate-500 truncate">{user.email}</p>
+              <p className="text-xs text-slate-400 truncate">@{user.username || "—"}</p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <RoleBadge role={user.role} t={t} />
+                <span className="badge bg-slate-100 text-slate-600">
+                  <Building2 size={12} /> {getBuildingName(user.building_id)}
+                </span>
+                {user.active === false && (
+                  <span className="badge bg-slate-100 text-slate-500">{t.users.statusInactive}</span>
+                )}
+              </div>
+            </div>
+            {!isSelf && (
+              <button
+                className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors shrink-0"
+                onClick={(e) => { e.stopPropagation(); onEdit(user) }}
+              >
+                <Pencil size={16} />
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+);
+
 function UserManagement() {
-  const { getTranslation, users, fetchUsers, createUser, enableFetchUsersQuery, isLoading, currentUser } = useStore()
+  const { getTranslation, users, fetchUsers, createUser, enableFetchUsersQuery, isLoading, currentUser, buildings, fetchBuildings, getBuildingName, usersRoleFilter, setUsersRoleFilter } = useStore()
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
   const t = getTranslation()
+  const isSupervisor = currentUser?.role === "supervisor"
+  const ownBuildingName = getBuildingName(currentUser?.building_id)
 
-  const getBuildingName = useCallback((id: number | undefined) => {
-    switch (id) {
-      case 1:
-        return "Edwards Hall"
-      case 2:
-        return "Holland Hall"
-      case 3:
-        return "Peterson Hall"
-      case 4:
-        return "Wade Hall"
-      case 5:
-        return "Carter Hall"
-      default:
-        return "All Buildings"
-    }
-  }, [])
+  const roleTabs = useMemo(
+    () =>
+      (isSupervisor
+        ? (["all", "supervisor", "staff"] as const)
+        : (["all", "admin", "supervisor", "staff"] as const)
+      ).map((value) => ({ value, label: t.users.roles[value] })),
+    [isSupervisor, t],
+  )
+
+  useEffect(() => {
+    fetchBuildings()
+  }, [fetchBuildings])
 
   const filteredUsers = useMemo(
     () =>
-      users.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.building?.toLowerCase().includes(searchTerm.toLowerCase()),
-      ),
-    [users, searchTerm],
+      users
+        .filter((user) => usersRoleFilter === "all" || user.role === usersRoleFilter)
+        .filter(
+          (user) =>
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.lastname ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.username ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.building?.toLowerCase().includes(searchTerm.toLowerCase()),
+        ),
+    [users, searchTerm, usersRoleFilter],
   )
 
   const handleCreateUser = useCallback(
@@ -291,57 +432,89 @@ function UserManagement() {
 
   if (isLoadingUsers) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-600">Loading...</p>
+          <Loader2 className="w-10 h-10 animate-spin text-brand-500 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm">Loading...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8">
+    <div>
       <Toaster position="top-right" />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.users.title}</h1>
-        <p className="text-gray-600">{t.users.subtitle}</p>
-      </div>
-
-      <div className="mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t.users.title}</h1>
+          <p className="text-slate-500 text-sm sm:text-base mt-1">{t.users.subtitle}</p>
+        </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          className="btn-primary btn-md text-sm w-full sm:w-auto"
         >
-          {showCreateForm ? <X size={20} /> : <Plus size={20} />}
+          {showCreateForm ? <X size={18} /> : <Plus size={18} />}
           {showCreateForm ? t.users.cancelCreate : t.users.createNew}
         </button>
       </div>
 
       {isLoading ? (
-        <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-brand-500 mx-auto mb-6" />
       ) : (
-        showCreateForm && <CreateUserForm onSubmit={handleCreateUser} onCancel={() => setShowCreateForm(false)} t={t} />
+        showCreateForm && (
+          <CreateUserForm
+            onSubmit={handleCreateUser}
+            onCancel={() => setShowCreateForm(false)}
+            t={t}
+            buildings={buildings}
+            isSupervisor={isSupervisor}
+            ownBuildingName={ownBuildingName}
+          />
+        )
       )}
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">{t.users.list}</h2>
-            <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+      <div className="card">
+        <div className="p-4 sm:p-6 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-800">{t.users.list}</h2>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
                 type="text"
                 placeholder={t.users.search}
-                className="pl-10 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                className="input input-icon text-sm"
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
+
+          <div className="flex gap-1 mt-4 overflow-x-auto -mx-1 px-1">
+            {roleTabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setUsersRoleFilter(tab.value)}
+                className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  usersRoleFilter === tab.value
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-6 overflow-x-auto">
-          <UsersTable users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} currentUser={currentUser} />
+        <div className="p-4 sm:p-6">
+          <div className="hidden md:block overflow-x-auto">
+            <UsersTable users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} currentUser={currentUser} />
+          </div>
+          <div className="md:hidden">
+            <UsersCardList users={filteredUsers} onEdit={setEditingUser} t={t} getBuildingName={getBuildingName} currentUser={currentUser} />
+          </div>
+          {filteredUsers.length === 0 && (
+            <p className="text-center text-slate-400 text-sm py-8">No users found.</p>
+          )}
         </div>
       </div>
 
@@ -362,4 +535,3 @@ function UserManagement() {
 export default UserManagement;
 
 export { UserManagement }
-

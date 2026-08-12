@@ -1,31 +1,35 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Building2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export const BuildingSelector: React.FC = () => {
-  const { selectedBuilding, setSelectedBuilding, getTranslation } = useStore();
+  const { selectedBuilding, setSelectedBuilding, getTranslation, buildings, fetchBuildings } = useStore();
   const t = getTranslation();
 
-  const buildings = [
+  useEffect(() => {
+    fetchBuildings();
+  }, [fetchBuildings]);
+
+  const options = [
     { id: 'all', name: t.buildings.all },
-    { id: 'edwards', name: t.buildings.edwards },
-    { id: 'holland', name: t.buildings.holland },
-    { id: 'peterson', name: t.buildings.peterson },
-    { id: 'wade', name: t.buildings.wade },
+    ...buildings.map((building) => ({
+      id: building.name,
+      name: building.name.charAt(0).toUpperCase() + building.name.slice(1),
+    })),
   ];
 
   return (
     <div className="relative">
       <Building2
-        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-        size={20}
+        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+        size={18}
       />
       <select
         value={selectedBuilding}
         onChange={(e) => setSelectedBuilding(e.target.value)}
-        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none bg-white"
+        className="input input-icon appearance-none pr-9"
       >
-        {buildings.map((building) => (
+        {options.map((building) => (
           <option key={building.id} value={building.id}>
             {building.name}
           </option>

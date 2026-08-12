@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Layers } from 'lucide-react';
 import { Suite } from '../types';
 import { useStore } from '../store/useStore';
 import Skeleton from './Skeleton';
@@ -15,7 +16,6 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite, isLoading }) => {
   const getRoomStatus = (id: string) => {
     const room = suite.rooms.find(r => r.id === id);
     if (!room) return 'pending';
-    console.log(suite)
     const allPresent = room.students.every(s => s.isPresent === 1 || s.isPresent === true);
     const allAbsent = room.students.every(s => s.isPresent === 0 || s.isPresent === false);
     const anyChecked = room.students.some(s => s.isPresent !== null);
@@ -31,33 +31,19 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite, isLoading }) => {
       case 'present': return 'bg-green-500';
       case 'absent': return 'bg-red-500';
       case 'partial': return 'bg-yellow-500';
-      default: return 'bg-gray-200';
+      default: return 'bg-slate-200';
     }
   };
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-card">
         <div className="flex justify-between items-center mb-4">
-          <Skeleton className="h-7 w-3/4" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
+          <Skeleton className="h-6 w-3/4" />
         </div>
-        <div className="space-y-4">
-          {[1, 2].map((index) => (
-            <div key={index} className="flex flex-col space-y-2">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <Skeleton className="h-5 w-1/3" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 px-3">
-                <Skeleton className="h-4 w-4 rounded-full" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-            </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-16 w-16 rounded-xl mx-auto" />
           ))}
         </div>
       </div>
@@ -70,17 +56,25 @@ export const SuiteCard: React.FC<SuiteCardProps> = ({ suite, isLoading }) => {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02 }}
       onClick={() => setSelectedSuite(suite.id)}
-      className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all cursor-pointer"
+      className="bg-white rounded-2xl p-5 border border-slate-100 shadow-card hover:shadow-card-hover transition-all cursor-pointer"
     >
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-       {suite.rooms[0].building} - Suite {suite.rooms[0].suiteNumber}
-      </h3>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+          <Layers size={17} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-slate-800 truncate leading-tight">
+            Suite {suite.rooms[0].suiteNumber}
+          </h3>
+          <p className="text-xs text-slate-400 truncate">{suite.rooms[0].building}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         {suite.rooms.map((room) => (
           <div key={room.id} className="flex flex-col items-center">
             <div
-              className={`w-16 h-16 rounded-xl ${getStatusColor(getRoomStatus(room.id))} 
-                flex items-center justify-center text-white font-semibold text-lg`}
+              className={`w-full aspect-square max-w-[4.5rem] rounded-xl ${getStatusColor(getRoomStatus(room.id))} 
+                flex items-center justify-center text-white font-semibold text-lg shadow-sm`}
             >
               {room.letter}
             </div>

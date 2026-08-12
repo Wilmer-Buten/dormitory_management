@@ -20,20 +20,20 @@ const ModalComponent: React.FC<ModalComponentProps> = ({
     const { getTranslation } = useStore();
     const t = getTranslation();
     return ReactDOM.createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60">
-    <div className="bg-white p-6 rounded-lg max-w-md">
-      <h2 className="text-xl font-bold mb-4">{title}</h2>
-      <p className="mb-4">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center z-[60] p-4">
+    <div className="bg-white p-6 rounded-2xl shadow-popover max-w-md w-full animate-slide-up">
+      <h2 className="text-lg font-bold text-slate-900 mb-3">{title}</h2>
+      <p className="mb-5 text-sm text-slate-600">
         {description}
       </p>
-      <div className="flex justify-end gap-4">
+      <div className="flex justify-end gap-3">
         <button
           onClick={handleCancelButton}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+          className="btn-secondary btn-md text-sm"
         >
           {t.common.cancel}
         </button>
-        <button onClick={handleConfirmButton} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <button onClick={handleConfirmButton} className="btn-primary btn-md text-sm">
           {confirmButtonText}
         </button>
       </div>

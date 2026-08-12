@@ -1,26 +1,12 @@
 import { create } from 'zustand';
-import { Room, User, Suite, Language } from '../types';
+import { Room, User, Suite, Building, Language, AttendanceReport } from '../types';
 import { translations } from '../i18n/translations';
 import toast from 'react-hot-toast';
-
-const getBuilding = (building_id : Number) => {
-  switch (building_id) {
-    case 1:
-      return 'edwards';
-    case 2:
-      return 'holland';
-    case 3:
-      return 'peterson';
-    case 4:
-      return 'wade';
-    default:
-      return 'all';
-  }
-}
 
 interface Store {
   rooms: Room[];
   users: User[];
+  buildings: Building[];
   currentUser: User | null;
   currentPage: number
   totalPages: number
@@ -33,16 +19,18 @@ interface Store {
   isLoading: boolean;
   accessToken: string;
   isAuthenticated: boolean;
-  currentSection: 'dashboard' | 'users' | 'settings' | 'import';
+  currentSection: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students';
   enableFetchRoomsQuery: boolean;
   enableFetchUsersQuery: boolean;
   selectedStat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending';
+  usersRoleFilter: 'all' | 'admin' | 'supervisor' | 'staff';
   err: string | null;
   theme: 'light' | 'dark';
   setSelectedStat: (stat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending') => void;
+  setUsersRoleFilter: (role: 'all' | 'admin' | 'supervisor' | 'staff') => void;
   setTheme: (theme: 'light' | 'dark') => void;
   onPageChange: (page: number) => void
-  setCurrentSection: (section: 'dashboard' | 'users' | 'settings' | 'import') => void;
+  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students') => void;
   setSearchQuery: (query: string) => void;
   setSelectedDate: (date: string) => void;
   setCurrentUser: (user: User) => void;
@@ -51,23 +39,26 @@ interface Store {
   setSelectedBuilding: (building: string) => void;
   setLanguage: (lang: Language) => void;
   updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0 | null, inRoom: boolean | null) => Promise<void>;
-  resetDailyChecks: () => Promise<void>;
   fetchRooms: () => Promise<Room[] | undefined>;
+  fetchBuildings: () => Promise<Building[]>;
+  fetchAttendanceReport: (params: { startDate: string; endDate: string; buildingId?: number | null }) => Promise<AttendanceReport>;
+  getBuildingName: (id: number | null | undefined) => string;
   fetchUsers: () => Promise<void>;
   createUser: (user: User) => Promise<void>;
   setEnableFetchRoomsQuery: (enable: boolean) => void;
   setEnableFetchUsersQuery: (enable: boolean) => void;
   setRooms: (rooms: Room[]) => void;
   setError: (error: string) => void;
-  fetchCurrentUser: () => Promise<void>;
   updateUser: (userId: number | undefined, userData: Partial<User>) => Promise<void>;
-  deleteUser: (userId: number | undefined) => Promise<void>;
+  setUserActiveStatus: (userId: number | undefined, active: boolean) => Promise<void>;
   importStudents: (students: any[], studentSelections?: Record<string, string>) => Promise<void>;
   setIsLoading: (isLoading: boolean) => void; 
   setIsAuthenticated: (status: boolean) => void;
   setAccessToken: (accessToken: string) => void;
   getSuites: () => Suite[];
-  addStudent: (roomId: string, studentName: String) => Promise<void>;
+  getDefaultViewMode: () => 'rooms' | 'suites';
+  canSelectSuiteView: () => boolean;
+  addStudent: (roomId: string, studentName: String, studentUid?: string) => Promise<void>;
   getStats: () => {
     totalRooms: number;
     presentCount: number;
@@ -84,9 +75,63 @@ interface Store {
 
 const API_URL = import.meta.env.VITE_API_URL;
 const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+
+const fetchWithAuth = async (url: string, options: RequestInit = {}, get: any, set: any) => {
+  let response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${get().accessToken}`,
+    },
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    try {
+      const refreshResponse = await fetch(`${API_URL}/refresh_token`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        set({ accessToken: data.accessToken, currentUser: data.user });
+        
+        // Retry original request with new token
+        response = await fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        });
+      } else {
+        throw new Error('Session expired');
+      }
+    } catch (error) {
+      set({
+        currentUser: null,
+        isAuthenticated: false,
+        accessToken: '',
+        viewMode: 'rooms',
+        selectedSuite: null,
+        rooms: [],
+        users: [],
+        currentPage: 1,
+        isLoading: false,
+        searchQuery: '',
+        currentSection: 'dashboard',
+      });
+      localStorage.removeItem('isAuthenticated');
+      throw new Error('Session expired. Please log in again.');
+    }
+  }
+  return response;
+};
+
 export const useStore = create<Store>((set, get) => ({
   rooms: [],
   users: [],
+  buildings: [],
   currentPage: 1,
   totalPages: 9,
   currentUser: null,
@@ -105,7 +150,9 @@ export const useStore = create<Store>((set, get) => ({
   isAuthenticated: isAuthenticated, 
   accessToken: '',
   selectedStat: 'all',
+  usersRoleFilter: 'all',
   onPageChange: (page) => set({ currentPage: page }),
+  setUsersRoleFilter: (role) => set({ usersRoleFilter: role }),
   setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode, selectedSuite: null, searchQuery: '' }),
   setEnableFetchRoomsQuery: (enable) => set({ enableFetchRoomsQuery: enable }),
   setEnableFetchUsersQuery: (enable) => set({ enableFetchUsersQuery: enable }),
@@ -113,17 +160,24 @@ export const useStore = create<Store>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedDate: (date) => {set({ selectedDate: date, selectedStat: 'all', searchQuery: '' })},
   setAccessToken: (accessToken) => set({ accessToken: accessToken }),
-  setCurrentUser: (user) => set({ currentUser: user }),
+  setCurrentUser: (user) => set({ currentUser: user, currentSection: user.role === 'staff' ? 'attendance' : 'dashboard' }),
   setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '', currentPage: 1 }),
   setSelectedSuite: (suiteId) => set({ selectedSuite: suiteId }),
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme: theme }),
-  setCurrentSection: (section) => set({ currentSection: section, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' }),
+  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students') => set((state) => ({
+    currentSection: section,
+    currentPage: 1,
+    viewMode: section === 'attendance' ? state.getDefaultViewMode() : 'rooms',
+    selectedStat: 'all',
+    searchQuery: ''
+  })),
   setSelectedBuilding: (building) => {
     const currentUserBuildingId = get().currentUser?.building_id;
-    if (currentUserBuildingId === null || currentUserBuildingId === 5) {
-      set({ selectedBuilding: building, currentPage: 1, viewMode: 'rooms', selectedStat: 'all', searchQuery: '' })
+    if (currentUserBuildingId === null || currentUserBuildingId === undefined) {
+      set({ selectedBuilding: building, currentPage: 1, selectedStat: 'all', searchQuery: '' })
+      set({ viewMode: get().getDefaultViewMode() })
     } else {
       toast.error(get().getTranslation().forbidden);
     }
@@ -131,17 +185,51 @@ export const useStore = create<Store>((set, get) => ({
   
   fetchRooms: async () => {
     try {
+      await get().fetchBuildings();
       let dateQueryParam = get().selectedDate ? `?building_id=${get().currentUser?.building_id}&date=${get().selectedDate}` : '';
-      const response = await fetch(`${API_URL}/rooms${dateQueryParam}`);
+      const response = await fetchWithAuth(`${API_URL}/rooms${dateQueryParam}`, {}, get, set);
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
-      set({selectedBuilding: getBuilding(get().currentUser?.building_id || 0, )});
+      const userBuildingId = get().currentUser?.building_id;
+      const matchedBuilding = get().buildings.find((b) => b.id === userBuildingId);
+      set({ selectedBuilding: matchedBuilding ? matchedBuilding.name : 'all' });
       set({ isLoading: false, enableFetchRoomsQuery: false });
       return data as Room[] | undefined; // Might return undefined
     } catch (error) {
       set({ err: (error as Error).message, isLoading: false });
       toast.error('Error loading rooms');
     }
+  },
+
+  fetchBuildings: async () => {
+    try {
+      const response = await fetchWithAuth(`${API_URL}/setup/buildings`, {}, get, set);
+      if (!response.ok) throw new Error('Failed to fetch buildings');
+      const data: Building[] = await response.json();
+      set({ buildings: data });
+      return data;
+    } catch (error) {
+      toast.error('Error loading buildings');
+      return [];
+    }
+  },
+
+  fetchAttendanceReport: async ({ startDate, endDate, buildingId }) => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (get().currentUser?.role === 'admin') {
+      params.set('building_id', buildingId === null || buildingId === undefined ? 'null' : String(buildingId));
+    }
+    const response = await fetchWithAuth(`${API_URL}/reports/attendance?${params.toString()}`, {}, get, set);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch attendance report');
+    return data as AttendanceReport;
+  },
+
+  getBuildingName: (id) => {
+    if (id === null || id === undefined) return get().getTranslation().buildings.all;
+    const building = get().buildings.find((b) => b.id === id);
+    if (!building) return get().getTranslation().buildings.all;
+    return building.name.charAt(0).toUpperCase() + building.name.slice(1);
   },
   login: async (email: string, password: string) => {
     set({ isLoading: true, err: null });
@@ -165,8 +253,10 @@ export const useStore = create<Store>((set, get) => ({
       set({
         currentUser: {
           id: data.user.id,
+          email: data.user.email,
           username: data.user.username,
           name: data.user.name,
+          lastname: data.user.lastname,
           role: data.user.role,
           building_id: data.user.building_id
         },
@@ -176,7 +266,8 @@ export const useStore = create<Store>((set, get) => ({
         searchQuery: '',
         viewMode: 'rooms',
         selectedStat: 'all',
-        currentPage: 1
+        currentPage: 1,
+        currentSection: data.user.role === 'staff' ? 'attendance' : 'dashboard'
       });
     } catch (error) {
       throw error;
@@ -206,7 +297,8 @@ export const useStore = create<Store>((set, get) => ({
           users: [],
           currentPage: 1,
           isLoading: false,
-          searchQuery: ''
+          searchQuery: '',
+          currentSection: 'dashboard'
         });
         localStorage.removeItem('isAuthenticated');
 
@@ -233,7 +325,10 @@ export const useStore = create<Store>((set, get) => ({
         const searchLower = searchQuery.toLowerCase();
         const matchesSearch = room.building.toLowerCase().includes(searchLower) ||
           room.suiteNumber.toString().includes(searchLower) ||
-          room.students.some((student) => student.name?.toLowerCase().includes(searchLower));
+          room.students.some((student) => 
+            student.name?.toLowerCase().includes(searchLower) ||
+            student.studentUid?.toLowerCase().includes(searchLower)
+          );
         if (!matchesSearch) return false;
       }
       
@@ -258,7 +353,7 @@ export const useStore = create<Store>((set, get) => ({
 
   fetchUsers: async () => {
     
-    const response = await fetch(`${API_URL}/users`);
+    const response = await fetchWithAuth(`${API_URL}/users`, {}, get, set);
     if (!response.ok) {
       throw new Error('Failed to fetch users');
     }
@@ -271,21 +366,32 @@ export const useStore = create<Store>((set, get) => ({
 
     set({ isLoading: true});
     try {
-      const response = await fetch(`${API_URL}/users/create`, {
+      const response = await fetchWithAuth(`${API_URL}/users/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(user),
-      });
+      }, get, set);
 
       const data = await response.json();
       if (!response.ok) {
         toast.error('Error creating user');
         throw new Error('Error creating user: ' + data.message);
       }
-      const userBuildingId = user.building === 'edwards' ? 1 : user.building === 'holland' ? 2 : user.building === 'peterson' ? 3 : user.building === 'wade' ? 4 : 5;
-      set({ users: [...get().users, { ...user, building_id: userBuildingId }], isLoading: false });
+      set({
+        users: [...get().users, {
+          id: data.id,
+          email: data.email,
+          username: data.username,
+          name: data.name,
+          lastname: data.lastname,
+          role: data.role,
+          building_id: data.building_id,
+          active: true,
+        }],
+        isLoading: false,
+      });
       toast.success('User created successfully');
       return data;
     } catch (error: any) {
@@ -298,27 +404,18 @@ export const useStore = create<Store>((set, get) => ({
     set({ rooms: rooms, isLoading: false });
   },
 
-  fetchCurrentUser: async () => {
-    try {
-      const response = await fetch(`${API_URL}/current_user`);
-      if (!response.ok) throw new Error('Failed to fetch user');
-      
-    } catch (error) {
-      toast.error('Error loading user data');
-    }
-  },
   updateUser: async (userId: number | undefined, userData: Partial<User>) => {
     try {
       
       let user = {...userData, id: userId};
       set({ isLoading: true });
-      const response = await fetch(`${API_URL}/users/edit/${userId}`, {
+      const response = await fetchWithAuth(`${API_URL}/users/edit/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(user)
-      });
+      }, get, set);
       
       const updatedUser = await response.json();
       if (!response.ok) {
@@ -343,51 +440,53 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  deleteUser: async (userId: number | undefined) => {
+  setUserActiveStatus: async (userId: number | undefined, active: boolean) => {
     set({ isLoading: true });
     try {
-      const response = await fetch(`${API_URL}/users/delete/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${get().accessToken}` },
-      });
+      const response = await fetchWithAuth(`${API_URL}/users/${userId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      }, get, set);
       const data = await response.json();
       if (!response.ok) {
         toast.error(data.message);
-        throw new Error('Failed to delete user');
+        throw new Error('Failed to update user status');
       }
 
       set((state) => ({
-        users: state.users.filter((user) => {
-          if (user.id === userId) {
-            return false;
-          }
-          return true;
-        })
+        users: state.users.map((user) => (user.id === userId ? { ...user, active } : user)),
+        isLoading: false,
       }));
-      set({ isLoading: false });
-      toast.success('User deleted successfully');
+      toast.success(active ? 'User activated successfully' : 'User deactivated successfully');
     } catch (error) {
       set({ isLoading: false });
-      toast.error('Failed to delete user');
+      toast.error('Failed to update user status');
     }
   },
 
-  addStudent: async (roomId: string, studentName: String) => {
+  addStudent: async (roomId: string, studentName: String, studentUid?: string) => {
     const currentUser = get().currentUser;
     if (!currentUser) return;
     // set({ isLoading: true });
     toast.loading(get().getTranslation().students.addingStudent + '...', { id: 'add-student' });
     try {
-      const response = await fetch(`${API_URL}/students/add`, {
+      const response = await fetchWithAuth(`${API_URL}/students/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: studentName,
-          roomId
+          roomId,
+          studentUid: studentUid || null
         })
-      });
+      }, get, set);
       const data = await response.json();
-      if (!response.ok) throw new Error('Failed to add student');
+      if (!response.ok) {
+        if (response.status === 409) {
+          toast.error('A student with this ID already exists', { id: 'add-student' });
+        }
+        throw new Error('Failed to add student');
+      }
 
       set((state) => ({
         rooms: state.rooms.map((room ) => {
@@ -408,7 +507,7 @@ export const useStore = create<Store>((set, get) => ({
     const currentUser = get().currentUser;
     if (!currentUser) return;
     try {
-      const response = await fetch(`${API_URL}/rooms/${roomId}/students/${studentId}`, {
+      const response = await fetchWithAuth(`${API_URL}/rooms/${roomId}/students/${studentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -417,7 +516,7 @@ export const useStore = create<Store>((set, get) => ({
           lastCheckedAt: get().selectedDate,
           inRoom
         })
-      });
+      }, get, set);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       set((state) => ({
@@ -449,29 +548,6 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  resetDailyChecks: async () => {
-    try {
-      const response = await fetch(`${API_URL}/reset`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to reset checks');
-
-      set((state) => ({
-        rooms: state.rooms.map((room) => ({
-          ...room,
-          students: room.students.map((student) => ({
-            ...student,
-            isPresent: null,
-            lastCheckedBy: undefined,
-            lastCheckedAt: undefined
-          }))
-        }))
-      }));
-
-      toast.success('Daily checks reset successfully');
-    } catch (error) {
-      toast.error('Failed to reset daily checks');
-    }
-  },
-
   getSuites: () => {
     const rooms = get().rooms;
     const selectedBuilding = get().selectedBuilding;
@@ -489,17 +565,49 @@ export const useStore = create<Store>((set, get) => ({
       id,
       number: id,
       building: rooms[0].building,
-      rooms: rooms.sort((a, b) => a.letter.localeCompare(b.letter))
+      rooms: rooms.sort((a, b) => (a.letter || '').localeCompare(b.letter || ''))
     }));
+  },
+
+  // Defaults to 'suites' when the relevant building (the current user's
+  // assigned building, or the currently selected building) uses the
+  // suite layout; otherwise defaults to 'rooms'.
+  getDefaultViewMode: () => {
+    const { buildings, currentUser, selectedBuilding } = get();
+    let targetBuilding;
+    if (currentUser?.building_id) {
+      targetBuilding = buildings.find((b) => b.id === currentUser.building_id);
+    } else if (selectedBuilding && selectedBuilding !== 'all') {
+      targetBuilding = buildings.find((b) => b.name === selectedBuilding);
+    }
+    return targetBuilding?.layout_type === 'suite' ? 'suites' : 'rooms';
+  },
+
+  // Whether the "Suites" view is a meaningful option for the relevant
+  // building context. When a specific building is in scope (the current
+  // user's assigned building, or the selected building) and it does not
+  // use the suite layout, suite view doesn't apply and should be hidden.
+  // When no single building is in scope (admin viewing "all"), keep it
+  // available since buildings may be mixed.
+  canSelectSuiteView: () => {
+    const { buildings, currentUser, selectedBuilding } = get();
+    let targetBuilding;
+    if (currentUser?.building_id) {
+      targetBuilding = buildings.find((b) => b.id === currentUser.building_id);
+    } else if (selectedBuilding && selectedBuilding !== 'all') {
+      targetBuilding = buildings.find((b) => b.name === selectedBuilding);
+    }
+    if (!targetBuilding) return true;
+    return targetBuilding.layout_type === 'suite';
   },
 
   deleteStudent: async (studentId: string, roomId: string) => {
     try {
       set({ isLoading: true });
-      const response = await fetch(`${API_URL}/students/delete/${studentId}`, {
-        method: 'GET',
+      const response = await fetchWithAuth(`${API_URL}/students/delete/${studentId}`, {
+        method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-      });
+      }, get, set);
       if (!response.ok) throw new Error('Failed to delete student');
 
       set((state) => ({
@@ -562,7 +670,7 @@ export const useStore = create<Store>((set, get) => ({
     if(previewData.length === 0) return;
     set({ isLoading: true, err: null });
     try {
-      const response = await fetch(`${API_URL}/students/import`, {
+      const response = await fetchWithAuth(`${API_URL}/students/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -571,7 +679,7 @@ export const useStore = create<Store>((set, get) => ({
           students: previewData,
           studentSelections
         })
-      });
+      }, get, set);
       const data = await response.json();
       if (!response.ok) {
         toast.error(data.message);

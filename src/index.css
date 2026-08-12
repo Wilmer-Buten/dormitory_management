@@ -3,21 +3,92 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply text-gray-800 bg-gray-50;
+    @apply text-slate-800 bg-slate-50 font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-brand-200/70;
+  }
+
+  /* Slim, unobtrusive scrollbars for a more polished feel */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(203 213 225);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(148 163 184);
   }
 }
 
 @layer components {
+  /* Buttons */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium text-sm transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
   }
-  
+
+  .btn-md {
+    @apply px-4 py-2.5 min-h-[2.75rem];
+  }
+
+  .btn-sm {
+    @apply px-3 py-2 text-sm;
+  }
+
   .btn-primary {
-    @apply bg-blue-500 text-white hover:bg-blue-600;
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:ring-offset-1;
   }
-  
+
   .btn-secondary {
-    @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+    @apply btn bg-white text-slate-700 border border-slate-200 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500/30;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400/40;
+  }
+
+  .btn-danger-solid {
+    @apply btn bg-red-600 text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400/50;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.95rem] text-slate-800 placeholder-slate-400 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400;
+  }
+
+  .input-icon {
+    @apply pl-10;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-slate-600 mb-1.5;
+  }
+
+  /* Surfaces */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-card;
+  }
+
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-card-hover;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
   }
 }

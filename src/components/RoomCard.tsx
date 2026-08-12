@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, X, Clock, Edit, Trash2, Eye } from "lucide-react";
+import { Check, X, Clock, Pencil, Trash2, Eye, DoorOpen, Plus } from "lucide-react";
 import { Room } from "../types";
 import { useStore } from "../store/useStore";
 import { useMutation } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentUid, setNewStudentUid] = useState("");
   const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -51,7 +52,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   });
 
   const addStudentMutation = useMutation({
-    mutationFn: ({ roomId, studentName }: { roomId: string; studentName: string }) => addStudent(roomId, studentName),
+    mutationFn: ({ roomId, studentName, studentUid }: { roomId: string; studentName: string; studentUid?: string }) => addStudent(roomId, studentName, studentUid),
     onSuccess: () => {
       setIsLoading(false);
     },
@@ -61,9 +62,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   });
 
   const handleAddStudent = () => {
-    // Verificar si alguno de los esudiantes tiene ID null
     const hasNullStudent = room.students.some(student => student.id === null);
-    console.log(hasNullStudent);
     if ((room.students.length === 2 && !hasNullStudent) || (room.students.length > 2 && hasNullStudent)) {
       toast.error(t.roomIsFull);
       return;
@@ -87,26 +86,28 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
 
   const handleSaveNewStudent = () => {
     if (newStudentName.trim()) {
-      console.log("Nuevo estudiante:", newStudentName);
       setIsAddingStudent(false);
+      const studentUid = newStudentUid.trim() || undefined;
       setNewStudentName("");
-      addStudentMutation.mutate({ roomId: room.id, studentName: newStudentName });
+      setNewStudentUid("");
+      addStudentMutation.mutate({ roomId: room.id, studentName: newStudentName, studentUid });
     }
   };
 
   const handleCancelAddStudent = () => {
     setIsAddingStudent(false);
     setNewStudentName("");
+    setNewStudentUid("");
   };
 
   const flipBack = () => {
     setIsFlipped(false);
     setIsAddingStudent(false);
     setNewStudentName("");
+    setNewStudentUid("");
   };
 
   const handleDelete = async (studentId: string) => {
-    console.log("Deleting student:", studentId);
     setStudentToDeleteId(studentId);
   };
 
@@ -123,25 +124,21 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-card">
         <div className="flex justify-between items-center mb-4">
-          <Skeleton className="h-7 w-3/4" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-9 w-9 rounded-lg" />
         </div>
         <div className="space-y-4">
           {[1, 2].map((index) => (
             <div key={index} className="flex flex-col space-y-2">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                 <Skeleton className="h-5 w-1/3" />
                 <div className="flex gap-2">
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <Skeleton className="h-9 w-9 rounded-lg" />
                 </div>
-              </div>
-              <div className="flex items-center gap-2 px-3">
-                <Skeleton className="h-4 w-4 rounded-full" />
-                <Skeleton className="h-4 w-2/3" />
               </div>
             </div>
           ))}
@@ -160,7 +157,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
         animate={{ rotateY: isFlipped ? 180 : 0 }}
         transition={{ duration: 0.6 }}
         style={{ transformStyle: "preserve-3d" }}
-        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow"
+        className="bg-white rounded-2xl p-5 border border-slate-100 shadow-card hover:shadow-card-hover transition-shadow"
       >
         {/* Front side */}
         <div
@@ -174,31 +171,46 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
         >
           {!isFlipped && (
             <>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">
-                  {t.room} {room.suiteNumber} {room.letter} - {room.building}
-                </h3>
+              <div className="flex justify-between items-start gap-2 mb-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                    <DoorOpen size={17} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-slate-800 truncate leading-tight">
+                      {t.room} {room.suiteNumber} {room.letter}
+                    </h3>
+                    <p className="text-xs text-slate-400 truncate">{room.building}</p>
+                  </div>
+                </div>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleEdit}
-                  className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  className="p-2.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors shrink-0"
+                  aria-label="Edit room"
                 >
-                  <Edit size={18} />
+                  <Pencil size={16} />
                 </motion.button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {(!room.students[0] || (room.students[0].id === null && room.students.length === 1)) ? (
-                  <div>{t.noStudents}</div>
+                  <div className="text-sm text-slate-400 py-3 text-center">{t.noStudents}</div>
                 ) : (
                   room.students.map((student) => {
                     if(student.id !== null) return (
-                      <div key={student.id} className="flex flex-col space-y-2">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                          <span className="text-gray-700">{student.name}</span>
-                          <div className="flex gap-2">
+                      <div key={student.id} className="flex flex-col space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-slate-700 text-sm font-medium truncate">{student.name}</span>
+                            {student.studentUid && (
+                              <span className="text-xs text-slate-400 truncate">{t.studentId}: {student.studentUid}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
                             <motion.button
                               whileTap={{ scale: 0.95 }}
+                              title={t.present}
                               onClick={() =>
                                 {
                                   ((student.isPresent === false || student.isPresent === 0 || student.isPresent === null) || (student.inRoom === true || student.inRoom === 1)) && mutation.mutate({
@@ -209,23 +221,23 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                                   })
                                 }
                               }
-                              className={`p-2 rounded-lg ${
+                              className={`p-2.5 rounded-lg transition-colors ${
                                 (student.isPresent === true ||
                                   student.isPresent === 1) &&
                                 (student.inRoom === false ||
                                   student.inRoom === 0 ||
                                   student.inRoom === null)
                                   ? "bg-green-500 text-white"
-                                  : "bg-gray-100 text-gray-500 hover:bg-green-100"
+                                  : "bg-white text-slate-400 hover:bg-green-50 hover:text-green-600"
                               }`}
                             >
-                              <Check size={20} />
+                              <Check size={18} />
                             </motion.button>
                             <motion.button
                               whileTap={{ scale: 0.95 }}
+                              title="In room"
                               onClick={() =>
                               {
-                                console.log(student);
                                 (student.inRoom === false || student.inRoom === 0 || student.inRoom === null) && mutation.mutate({
                                   roomId: room.id,
                                   studentId: student.id,
@@ -234,16 +246,17 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                                 })
                               }
                               }
-                              className={`p-2 rounded-lg ${
+                              className={`p-2.5 rounded-lg transition-colors ${
                                 student.inRoom === true || student.inRoom === 1
                                   ? "bg-yellow-500 text-white"
-                                  : "bg-gray-100 text-gray-500 hover:bg-red-100"
+                                  : "bg-white text-slate-400 hover:bg-yellow-50 hover:text-yellow-600"
                               }`}
                             >
-                              <Eye size={20} />
+                              <Eye size={18} />
                             </motion.button>
                             <motion.button
                               whileTap={{ scale: 0.95 }}
+                              title={t.absent}
                               onClick={() =>
                               {
                                 ((student.isPresent === true || student.isPresent === 1 || student.isPresent === null) || (student.inRoom === true || student.inRoom === 1)) && mutation.mutate({
@@ -254,27 +267,25 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                                 })
                               }
                               }
-                              className={`p-2 rounded-lg ${
+                              className={`p-2.5 rounded-lg transition-colors ${
                                 (student.isPresent === false ||
                                   student.isPresent === 0) &&
                                 (student.inRoom === false ||
                                   student.inRoom === 0 ||
                                   student.inRoom === null)
                                   ? "bg-red-500 text-white"
-                                  : "bg-gray-100 text-gray-500 hover:bg-red-100"
+                                  : "bg-white text-slate-400 hover:bg-red-50 hover:text-red-600"
                               }`}
                             >
-                              <X size={20} />
+                              <X size={18} />
                             </motion.button>
                           </div>
                         </div>
                         {student.lastCheckedBy && (
-                          <div className="flex items-center gap-2 text-sm text-gray-500 px-3">
-                            <Clock size={14} />
-                            <span>
-
-                              {t.verifiedBy} {student.lastCheckedBy} ||{" "}
-                              {student.lastCheckedAt}
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400 px-1">
+                            <Clock size={12} />
+                            <span className="truncate">
+                              {t.verifiedBy} {student.lastCheckedBy} · {student.lastCheckedAt}
                             </span>
                           </div>
                         )}
@@ -300,78 +311,71 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
           {isFlipped && (
             <>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">
+                <h3 className="font-semibold text-slate-800">
                   Edit Room {room.suiteNumber} {room.letter}
                 </h3>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={flipBack}
-                  className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  className="p-2.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </motion.button>
               </div>
-              {(room.students[0].id === null && room.students.length === 1) ? (
-                <div>{t.noStudents}</div>
-              ) : (
-                room.students.map((student) => {
-                  if(student.id !== null) return (
-                    <div key={student.id} className="flex flex-col space-y-2">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                        <span className="text-gray-700">{student.name}</span>
-                        <div className="flex gap-2">
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => handleDelete(student.id)}
-                            className="p-2 rounded-lg bg-red-100 text-red-500 hover:bg-red-200"
-                          >
-                            <Trash2 size={20} />
-                          </motion.button>
-                        </div>
+              <div className="space-y-2">
+                {(room.students[0].id === null && room.students.length === 1) ? (
+                  <div className="text-sm text-slate-400 py-2">{t.noStudents}</div>
+                ) : (
+                  room.students.map((student) => {
+                    if(student.id !== null) return (
+                      <div key={student.id} className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl">
+                        <span className="text-slate-700 text-sm font-medium truncate">{student.name}</span>
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleDelete(student.id)}
+                          className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors shrink-0"
+                        >
+                          <Trash2 size={16} />
+                        </motion.button>
                       </div>
-                    </div>
-                  )
-                })
-              )}
+                    )
+                  })
+                )}
+              </div>
               {isAddingStudent ? (
-                <div className="mt-4 p-4 bg-gray-100 rounded-lg shadow-lg">
+                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <input
+                    autoFocus
                     type="text"
-                    placeholder="Nombre del estudiante"
+                    placeholder="Student name"
                     value={newStudentName}
                     onChange={(e) => setNewStudentName(e.target.value)}
-                    className="p-2 w-full border border-gray-300 rounded-lg mb-2"
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveNewStudent()}
+                    className="input mb-2"
                   />
-                  <div className="flex justify-end space-x-2">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleSaveNewStudent}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                    >
-                     { t.common.save }
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleCancelAddStudent}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                    >
+                  <input
+                    type="text"
+                    placeholder={t.studentId + " (optional)"}
+                    value={newStudentUid}
+                    onChange={(e) => setNewStudentUid(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveNewStudent()}
+                    className="input mb-2"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button onClick={handleCancelAddStudent} className="btn-secondary btn-sm">
                       {t.common.cancel}
-                    </motion.button>
+                    </button>
+                    <button onClick={handleSaveNewStudent} className="btn-primary btn-sm">
+                      {t.common.save}
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div className="mt-4 flex justify-center">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleAddStudent}
-                    className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                  >
-                    Add New Student
-                  </motion.button>
+                  <button onClick={handleAddStudent} className="btn-secondary btn-sm">
+                    <Plus size={16} /> Add Student
+                  </button>
                 </div>
               )}
             </>

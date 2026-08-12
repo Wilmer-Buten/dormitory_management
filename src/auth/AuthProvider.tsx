@@ -10,10 +10,10 @@ import { useStore } from "../store/useStore";
         try {
           const response = await fetch(`${api}/current_user`, {
             method: 'GET',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${accessToken}`,
-              credentials: 'include'
             },
           });
   

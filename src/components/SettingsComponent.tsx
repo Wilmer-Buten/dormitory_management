@@ -6,34 +6,36 @@ export function SettingsComponent() {
   const { getTranslation, language, setLanguage } = useStore();
   const [theme, setTheme] = React.useState('light');
   const t = getTranslation();
-  console.log(t.settings.languages['en']);
+
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.settings.title}</h1>
-        <p className="text-gray-600">{t.settings.subtitle}</p>
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t.settings.title}</h1>
+        <p className="text-slate-500 text-sm sm:text-base mt-1">{t.settings.subtitle}</p>
       </div>
 
-      <div className="grid gap-8">
+      <div className="grid gap-5 max-w-2xl">
         {/* Language Settings */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <Globe className="text-gray-400" size={24} />
+        <div className="card p-5 sm:p-6">
+          <div className="flex items-center gap-3.5 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+              <Globe size={19} />
+            </div>
             <div>
-              <h2 className="text-xl font-semibold">{t.settings.language}</h2>
-              <p className="text-gray-600">{t.settings.languageDescription}</p>
+              <h2 className="font-semibold text-slate-800">{t.settings.language}</h2>
+              <p className="text-slate-500 text-sm">{t.settings.languageDescription}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             {['en', 'es', 'fr'].map((lang) => (
               <button
                 key={lang}
                 onClick={() => setLanguage(lang as 'en' | 'es' | 'fr')}
-                className={`p-4 rounded-lg border ${
-                  language === lang 
-                    ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                    : 'border-gray-200 hover:border-blue-500'
+                className={`p-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                  language === lang
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
                 {t.settings.languages[lang as keyof typeof t.settings.languages]}
@@ -43,26 +45,24 @@ export function SettingsComponent() {
         </div>
 
         {/* Theme Settings */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-4 mb-6">
-            {theme === 'light' ? (
-              <Sun className="text-gray-400" size={24} />
-            ) : (
-              <Moon className="text-gray-400" size={24} />
-            )}
+        <div className="card p-5 sm:p-6">
+          <div className="flex items-center gap-3.5 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+              {theme === 'light' ? <Sun size={19} /> : <Moon size={19} />}
+            </div>
             <div>
-              <h2 className="text-xl font-semibold">{t.settings.theme}</h2>
-              <p className="text-gray-600">{t.settings.themeDescription}</p>
+              <h2 className="font-semibold text-slate-800">{t.settings.theme}</h2>
+              <p className="text-slate-500 text-sm">{t.settings.themeDescription}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setTheme('light')}
-              className={`p-4 rounded-lg border ${
+              className={`p-3 rounded-xl border-2 text-sm font-medium transition-colors ${
                 theme === 'light'
-                  ? 'border-blue-500 bg-blue-50 text-blue-600'
-                  : 'border-gray-200 hover:border-blue-500'
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
               {t.settings.light}
@@ -70,10 +70,10 @@ export function SettingsComponent() {
             <button
               disabled
               onClick={() => setTheme('dark')}
-              className={`p-4 rounded-lg border ${
+              className={`p-3 rounded-xl border-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 theme === 'dark'
-                  ? 'border-blue-500 bg-blue-50 text-blue-600'
-                  : 'border-gray-200 hover:border-blue-500'
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
               {t.settings.dark}

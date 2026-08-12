@@ -19,8 +19,12 @@ import type { PreviewData } from "../types";
 import ModalComponent from "./ModalComponent";
 
 function DataImport() {
-  const { getTranslation, importStudents, rooms, isLoading, currentUser } = useStore();
+  const { getTranslation, importStudents, rooms, isLoading, currentUser, buildings, fetchBuildings, accessToken } = useStore();
   const t = getTranslation();
+
+  useEffect(() => {
+    fetchBuildings();
+  }, [fetchBuildings]);
   const [dragActive, setDragActive] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string>("");
@@ -43,10 +47,10 @@ function DataImport() {
       if (sheet) {
         const allRows = utils.sheet_to_json(sheet);
   
-        // Verificar si las columnas requeridas existen en la primera fila
+        // Verify that required columns exist (Name, Building, Suite are required; Room is optional for standalone)
         if (
           allRows.length === 0 ||
-          !["Name", "Building", "Suite", "Room"].every((key) =>
+          !["Name", "Building", "Suite"].every((key) =>
             Object.keys(allRows[0]).includes(key)
           )
         ) {
@@ -58,7 +62,9 @@ function DataImport() {
         }
   
         // Filtrar filas vacías y mapear datos
-        const currentUserBuilding = currentUser?.building_id === 1 ? 'edwards' : currentUser?.building_id === 2 ? 'holland' : currentUser?.building_id === 3 ? 'peterson' : currentUser?.building_id === 4 ? 'wade' : 'all';
+        const currentUserBuilding = currentUser?.building_id
+          ? buildings.find((b) => b.id === currentUser.building_id)?.name
+          : null; // null building_id (admin) = no building restriction
         const filteredRows = allRows
           .filter((row) =>
             Object.values(row as any).some(
@@ -69,7 +75,7 @@ function DataImport() {
                 !(typeof value === "string" && value.trim() === "")
             )
           ).filter((row: any)=> {
-            if(row.Building.toLowerCase() === currentUserBuilding)
+            if(!currentUserBuilding || row.Building.toLowerCase() === currentUserBuilding)
             {
               return true;
             }
@@ -77,8 +83,8 @@ function DataImport() {
             return false;
           })
           .map((row) => {
-            const { Name, Building, Suite, Room } = row as any;
-            return { Name, Building, Suite, Room };
+            const { Name, ID, Building, Suite, Room } = row as any;
+            return { Name, ID: ID ?? null, Building, Suite, Room };
           });
         const headers =
           filteredRows.length > 0 ? Object.keys(filteredRows[0]) : [];
@@ -168,15 +174,17 @@ function DataImport() {
   };
 
   const checkForMatches = (data: any[]) => {
-    const validations = {
-      buildings: ["edwards", "holland", "peterson", "wade", "carter"],
-      rooms: ["A", "B", "C", "D"],
-    };
+    const buildingList = buildings.map((b) => b.name);
+    const validLetters = ["A", "B", "C", "D"];
     const err = {
       suite: "",
       room: "",
       building: "",
     };
+
+    // Helper: get building layout type
+    const getBuildingLayout = (buildingName: string) =>
+      buildings.find((b) => b.name === buildingName.toLowerCase())?.layout_type ?? 'suite';
   
     // Filtrar solo las filas que tienen datos válidos en las columnas esperadas
     const validRows = data.filter((row) => {
@@ -194,24 +202,27 @@ function DataImport() {
       const buildingLower = row.Building
         ? row.Building.toString().toLowerCase()
         : "";
-      
-      const suiteNumber = row.Suite ? parseInt(row.Suite, 10) : NaN;
+      const layoutType = getBuildingLayout(buildingLower);
+      const isStandalone = layoutType === 'standalone';
+      const suiteOrRoom = row.Suite ? row.Suite.toString().trim() : "";
   
-      // Validar suite, room y building
-      if (isNaN(suiteNumber) || suiteNumber.toString().length !== 3) {
-        err.suite = "It seems that a suite field is invalid (see row " + rowNum + ")";
-      } else if (
-        !row.Room ||
-        row.Room.toString().trim().length !== 1 ||
-        validations.rooms.indexOf(row.Room.toString().trim()) === -1
-      ) {
-        err.room = "It seems that a room field is empty (see row " + rowNum + ")";
-      } else if (
-        !buildingLower ||
-        buildingLower.length === 0 ||
-        validations.buildings.indexOf(buildingLower) === -1
-      ) {
+      // Validate building
+      if (!buildingLower || buildingList.indexOf(buildingLower) === -1) {
         err.building = "It seems that a building field is invalid (see row " + rowNum + ")";
+      } else if (!suiteOrRoom) {
+        err.suite = "It seems that a suite/room field is empty (see row " + rowNum + ")";
+      } else if (!isStandalone) {
+        // Suite-based: validate suite number format
+        const suiteNumber = parseInt(suiteOrRoom, 10);
+        if (isNaN(suiteNumber) || suiteOrRoom.length > 3) {
+          err.suite = "It seems that a suite field is invalid (see row " + rowNum + ")";
+        } else if (
+          !row.Room ||
+          row.Room.toString().trim().length !== 1 ||
+          validLetters.indexOf(row.Room.toString().trim()) === -1
+        ) {
+          err.room = "It seems that a room field is empty or invalid (see row " + rowNum + ")";
+        }
       }
   
       if (err.suite.length > 0 || err.room.length > 0 || err.building.length > 0) {
@@ -220,24 +231,38 @@ function DataImport() {
         setSelectedSheet("");
         return false;
       }
-  
-      return rooms.some(
-        (room) =>
-          room.suiteNumber === suiteNumber &&
-          room.letter.trim() === row.Room &&
-          room.building.toLowerCase() === buildingLower &&
-          room.students &&
-          room.students[0] &&
-          room.students[0].id !== null
-      );
+
+      if (isStandalone) {
+        // For standalone: match by room.number
+        return rooms.some(
+          (room) =>
+            room.building.toLowerCase() === buildingLower &&
+            (room as any).roomNumber?.toString() === suiteOrRoom &&
+            room.students &&
+            room.students[0] &&
+            room.students[0].id !== null
+        );
+      } else {
+        const suiteNumber = parseInt(suiteOrRoom, 10);
+        return rooms.some(
+          (room) =>
+            room.suiteNumber === suiteNumber &&
+            (room.letter || '').trim() === row.Room &&
+            room.building.toLowerCase() === buildingLower &&
+            room.students &&
+            room.students[0] &&
+            room.students[0].id !== null
+        );
+      }
     });
-  
   
     // Check for name matches (yellow highlight)
     const nameMatches = validRows.filter((row) => {
       if (!row.Name) return false;
-      
-      const suiteNumber = row.Suite ? parseInt(row.Suite, 10) : NaN;
+      const buildingLower = row.Building?.toString().toLowerCase() ?? "";
+      const layoutType = getBuildingLayout(buildingLower);
+      const isStandalone = layoutType === 'standalone';
+      const suiteOrRoom = row.Suite ? row.Suite.toString().trim() : "";
       
       return rooms.some(
         (room) =>
@@ -246,7 +271,10 @@ function DataImport() {
             (student) =>
               student.name &&
               student.name.toLowerCase() === row.Name.toLowerCase() &&
-              room.suiteNumber === suiteNumber
+              (isStandalone
+                ? (room as any).roomNumber?.toString() === suiteOrRoom && room.building.toLowerCase() === buildingLower
+                : room.suiteNumber === parseInt(suiteOrRoom, 10)
+              )
           )
       );
     });
@@ -258,24 +286,33 @@ function DataImport() {
     const initialExpandedRows: Record<string, boolean> = {};
     roomMatches.forEach((match) => {
       const buildingLower = match.Building.toString().toLowerCase();
-      const suiteNumber = parseInt(match.Suite, 10);
+      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
+      const isStandalone = layoutType === 'standalone';
+      const suiteOrRoomStr = match.Suite ? match.Suite.toString().trim() : "";
+      const suiteNumber = isStandalone ? NaN : parseInt(suiteOrRoomStr, 10);
+
+      // roomKey matches backend convention
+      const roomKey = isStandalone
+        ? `${buildingLower}-${suiteOrRoomStr}-`
+        : `${buildingLower}-${suiteOrRoomStr}-${match.Room}`;
   
       const isAlsoNameMatch = nameMatches.some(
         (nameMatch) =>
-          parseInt(nameMatch.Suite, 10) === suiteNumber &&
-          nameMatch.Room === match.Room &&
           nameMatch.Building.toLowerCase() === buildingLower &&
+          nameMatch.Suite?.toString().trim() === suiteOrRoomStr &&
+          (isStandalone || nameMatch.Room === match.Room) &&
           nameMatch.Name.toLowerCase() === match.Name.toLowerCase()
       );
   
       if (!isAlsoNameMatch) {
-        const roomKey = `${buildingLower}-${suiteNumber}-${match.Room}`;
         initialExpandedRows[roomKey] = true;
         const matchedRoom = rooms.find(
           (room) =>
-            room.suiteNumber === suiteNumber &&
-            room.letter.trim() === match.Room &&
-            room.building.toLowerCase() === buildingLower
+            room.building.toLowerCase() === buildingLower &&
+            (isStandalone
+              ? (room as any).roomNumber?.toString() === suiteOrRoomStr
+              : room.suiteNumber === suiteNumber && (room.letter || '').trim() === match.Room
+            )
         );
   
         if (matchedRoom && matchedRoom.students && matchedRoom.students.length > 0) {
@@ -293,21 +330,24 @@ function DataImport() {
               const rowBuildingLower = row.Building
                 ? row.Building.toString().toLowerCase()
                 : "";
-              const rowSuiteNumber = parseInt(row.Suite, 10);
+              const rowSuiteStr = row.Suite ? row.Suite.toString().trim() : "";
+              const isStandaloneRow = buildings.find((b) => b.name === rowBuildingLower)?.layout_type === 'standalone';
               const isNameMatch = nameMatches.some(
                 (nameMatch) =>
                   nameMatch.Building.toLowerCase() === rowBuildingLower &&
-                  parseInt(nameMatch.Suite, 10) === rowSuiteNumber &&
-                  nameMatch.Room === row.Room &&
+                  nameMatch.Suite?.toString().trim() === rowSuiteStr &&
+                  (isStandaloneRow || nameMatch.Room === row.Room) &&
                   nameMatch.Name.toLowerCase() === row.Name.toLowerCase()
               );
-  
-              if (
-                rowBuildingLower === matchedRoom.building.toLowerCase() &&
-                rowSuiteNumber === matchedRoom.suiteNumber &&
-                row.Room === matchedRoom.letter &&
-                !isNameMatch
-              ) {
+
+              const rowMatchesRoom = isStandaloneRow
+                ? rowBuildingLower === matchedRoom.building.toLowerCase() &&
+                  rowSuiteStr === (matchedRoom as any).roomNumber?.toString()
+                : rowBuildingLower === matchedRoom.building.toLowerCase() &&
+                  parseInt(rowSuiteStr, 10) === matchedRoom.suiteNumber &&
+                  row.Room === matchedRoom.letter;
+
+              if (rowMatchesRoom && !isNameMatch) {
                 return index;
               }
               return undefined;
@@ -399,7 +439,7 @@ function DataImport() {
   const handleStudentSelection = useCallback(
     (roomKey: string, studentId: string, rowIndex: number) => {
       const [building, suite, room] = roomKey.split("-");
-      const studentsInRoom = getStudentsForRoom(building, Number(suite), room);
+      const studentsInRoom = getStudentsForRoom(building, suite, room ?? "");
       if (studentsInRoom.length === 1) {
         studentsInRoom.push({
           id: "-1",
@@ -433,20 +473,20 @@ function DataImport() {
   );
 
   const getStudentsForRoom = useCallback(
-    (building: string, suite: number, room: string) => {
-      const matchedRoom = rooms.find(
-        (r) =>
-          r.suiteNumber === suite &&
-          r.letter.trim() === room &&
-          r.building === building.trim().toLowerCase()
+    (building: string, suiteOrRoomNumber: string, roomLetter: string) => {
+      const buildingLower = building.trim().toLowerCase();
+      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
+      const isStandalone = layoutType === 'standalone';
+      const matchedRoom = rooms.find((r) =>
+        isStandalone
+          ? (r as any).roomNumber?.toString() === suiteOrRoomNumber && r.building === buildingLower
+          : r.suiteNumber === parseInt(suiteOrRoomNumber, 10) &&
+            (r.letter || '').trim() === roomLetter &&
+            r.building === buildingLower
       );
-      const matchedRoomStudents = matchedRoom?.students.filter((student) => {
-        return student.id !== null;
-      });
-
-      return matchedRoomStudents || [];
+      return matchedRoom?.students.filter((student) => student.id !== null) || [];
     },
-    [rooms]
+    [rooms, buildings]
   );
 
   const handleCancel = useCallback(() => {
@@ -463,7 +503,8 @@ function DataImport() {
 
   
       const response = await fetch(
-        import.meta.env.VITE_API_URL + "/excel/template"
+        import.meta.env.VITE_API_URL + "/excel/template",
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
       if (!response.ok) {
@@ -475,7 +516,7 @@ function DataImport() {
     } catch (error) {
       toast.error("Failed to download template", { id: "download-template" });
     }
-  }, [])
+  }, [accessToken])
 
   const downloadTemplateExcel = useCallback(async () => {
     try {
@@ -561,35 +602,36 @@ function DataImport() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="relative">
-          <div className="w-12 h-12 rounded-full border-4 border-blue-200 animate-[spin_1.5s_linear_infinite]" />
-          <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-[spin_1.2s_linear_infinite] absolute inset-0" />
-          <div className="w-12 h-12 rounded-full border-4 border-transparent border-l-blue-300 animate-[spin_2s_linear_infinite] absolute inset-0" />
+          <div className="w-12 h-12 rounded-full border-4 border-brand-200 animate-[spin_1.5s_linear_infinite]" />
+          <div className="w-12 h-12 rounded-full border-4 border-brand-500 border-t-transparent animate-[spin_1.2s_linear_infinite] absolute inset-0" />
+          <div className="w-12 h-12 rounded-full border-4 border-transparent border-l-brand-300 animate-[spin_2s_linear_infinite] absolute inset-0" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
+    <div>
       <Toaster position="top-right" />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.import.title}</h1>
-        <p className="text-gray-600">{t.import.subtitle}</p>
-      </div>
+      {/* <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t.import.title}</h1>
+        <p className="text-slate-500 text-sm sm:text-base mt-1">{t.import.subtitle}</p>
+      </div> */}
   
       {!previewData.length ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">{t.import.instructions.title}</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-5 order-2 lg:order-1">
+            <div className="card p-5 sm:p-6">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">{t.import.instructions.title}</h2>
               <div className="space-y-4">
-                <p className="text-gray-600">{t.import.instructions.description}</p>
+                <p className="text-slate-500 text-sm">{t.import.instructions.description}</p>
                 <div className="space-y-2">
-                  <h3 className="font-medium text-gray-700">{t.import.instructions.sheets}:</h3>
-                  <ul className="list-disc pl-5 space-y-2 text-gray-600">
+                  <h3 className="font-medium text-slate-700 text-sm">{t.import.instructions.sheets}:</h3>
+                  <ul className="list-disc pl-5 space-y-1.5 text-slate-500 text-sm">
                     <li>{t.import.instructions.name}</li>
+                    <li>{t.import.instructions.id}</li>
                     <li>{t.import.instructions.room}</li>
                     <li>{t.import.instructions.suite}</li>
                     <li>{t.import.instructions.building}</li>
@@ -598,29 +640,29 @@ function DataImport() {
               </div>
             </div>
   
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-brand-50 border border-brand-100 rounded-2xl p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="text-blue-500 mt-0.5" size={20} />
+                <AlertCircle className="text-brand-500 mt-0.5 shrink-0" size={20} />
                 <div>
-                  <h3 className="font-medium text-blue-800 mb-1">{t.import.note.title}</h3>
-                  <p className="text-blue-600 text-sm">{t.import.note.description}</p>
+                  <h3 className="font-medium text-brand-800 mb-1 text-sm">{t.import.note.title}</h3>
+                  <p className="text-brand-600 text-sm">{t.import.note.description}</p>
                 </div>
               </div>
             </div>
   
             {/* Template Download Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">{t.import.template.title}</h2>
+            <div className="card p-5 sm:p-6">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">{t.import.template.title}</h2>
               <div className="space-y-4">
-                <p className="text-gray-600">
+                <p className="text-slate-500 text-sm">
                   {t.import.template.description} 
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={downloadTemplateExcel}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="btn-secondary btn-md text-sm"
                   >
-                    <FileDown size={20} />
+                    <FileDown size={18} />
                     {t.import.template.button}
                   </button>
                 </div>
@@ -629,8 +671,8 @@ function DataImport() {
           </div>
   
           <div
-            className={`bg-white rounded-lg shadow p-8 ${
-              dragActive ? "border-2 border-dashed border-blue-400 bg-blue-50" : ""
+            className={`card p-6 sm:p-8 flex items-center justify-center order-1 lg:order-2 min-h-[16rem] transition-colors ${
+              dragActive ? "border-2 border-dashed border-brand-400 bg-brand-50" : ""
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -638,11 +680,13 @@ function DataImport() {
             onDrop={handleDrop}
           >
             <div className="text-center">
-              <FileSpreadsheet className="mx-auto text-gray-400 mb-4" size={48} />
-              <h3 className="text-xl font-semibold mb-2">{t.import.dropzone.title}</h3>
-              <p className="text-gray-500 mb-6">{t.import.dropzone.description}</p>
-              <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
-                <Upload size={20} />
+              <div className="w-16 h-16 rounded-2xl bg-brand-50 text-brand-500 flex items-center justify-center mx-auto mb-4">
+                <FileSpreadsheet size={30} />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">{t.import.dropzone.title}</h3>
+              <p className="text-slate-500 text-sm mb-6">{t.import.dropzone.description}</p>
+              <label className="btn-primary btn-md text-sm cursor-pointer inline-flex">
+                <Upload size={18} />
                 {t.import.dropzone.button}
                 <input
                   type="file"
@@ -655,14 +699,14 @@ function DataImport() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
+        <div className="card">
+          <div className="p-4 sm:p-6 border-b border-slate-100">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <TableIcon className="text-gray-400" size={24} />
+              <div className="flex items-center gap-3">
+                <TableIcon className="text-slate-400 shrink-0" size={22} />
                 <div>
-                  <h2 className="text-xl font-semibold">{t.import.dataPreview.title}</h2>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-lg font-semibold text-slate-800">{t.import.dataPreview.title}</h2>
+                  <p className="text-sm text-slate-500">
                     Showing {selectedPreview?.rows.length} of {selectedPreview?.allRows.length} records
                   </p>
                 </div>
@@ -671,7 +715,7 @@ function DataImport() {
                 <select
                   value={selectedSheet}
                   onChange={(e) => setSelectedSheet(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto"
+                  className="input text-sm w-full sm:w-auto"
                 >
                   {previewData.map((preview) => (
                     <option key={preview.sheet} value={preview.sheet}>
@@ -682,13 +726,13 @@ function DataImport() {
                 <div className="flex items-center gap-2 mx-auto">
                   <button
                     onClick={handleCancel}
-                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                    className="btn-secondary btn-md text-sm"
                   >
                     {t.common.cancel}
                   </button>
                   <button
                     onClick={handleSave}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="btn-primary btn-md text-sm"
                   >
                     {t.import.importButton}
                   </button>
@@ -699,14 +743,14 @@ function DataImport() {
   
           {selectedPreview && (
             <>
-              <div className="p-4 bg-gray-100 border-b border-gray-200">
+              <div className="p-4 bg-slate-50 border-b border-slate-100">
                 <div className="flex flex-col space-y-2">
-                  <p className="text-sm text-gray-600">
-                    <span className="inline-block w-4 h-4 bg-red-300 mr-2"></span>
+                  <p className="text-sm text-slate-600 flex items-center">
+                    <span className="inline-block w-3.5 h-3.5 rounded bg-red-300 mr-2"></span>
                     {t.import.dataPreview.legend.redLabel}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="inline-block w-4 h-4 bg-yellow-200 mr-2"></span>
+                  <p className="text-sm text-slate-600 flex items-center">
+                    <span className="inline-block w-3.5 h-3.5 rounded bg-yellow-200 mr-2"></span>
                     {t.import.dataPreview.legend.yellowLabel}
                   </p>
                 </div>
@@ -714,27 +758,31 @@ function DataImport() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <tr className="bg-slate-50">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                         Actions
                       </th>
                       {selectedPreview.headers.map((header, index) => (
                         <th
                           key={index}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
                         >
                           {header}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-slate-100">
                     {selectedPreview.rows.map((row, rowIndex) => {
                       const buildingLower = row.Building ? row.Building.toString().toLowerCase() : "";
+                      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
+                      const isStandalone = layoutType === 'standalone';
+                      const suiteOrRoomStr = row.Suite ? row.Suite.toString().trim() : "";
+
                       const isRoomMatching = matchingStudents.some(
                         (match) =>
-                          match.Suite === row.Suite&&
-                          match.Room === row.Room &&
+                          match.Suite?.toString().trim() === suiteOrRoomStr &&
+                          (isStandalone || match.Room === row.Room) &&
                           match.Building.toLowerCase() === buildingLower 
                       );
   
@@ -745,34 +793,37 @@ function DataImport() {
                           match.Name.toLowerCase() === row.Name.toLowerCase()
                       );
   
-                      let rowClass = rowIndex % 2 === 0 ? "bg-gray-50" : "bg-white";
+                      let rowClass = rowIndex % 2 === 0 ? "bg-slate-50" : "bg-white";
                       if (isNameMatching) {
                         rowClass = "bg-yellow-200";
                       } else if (isRoomMatching) {
                         rowClass = "bg-red-300";
                       }
   
-                      const roomKey = `${buildingLower}-${row.Suite}-${row.Room}`;
+                      // roomKey must match backend convention
+                      const roomKey = isStandalone
+                        ? `${buildingLower}-${suiteOrRoomStr}-`
+                        : `${buildingLower}-${suiteOrRoomStr}-${row.Room}`;
                       
                       const studentsInRoom =
                         isRoomMatching && !isNameMatching
-                          ? getStudentsForRoom(buildingLower, Number.parseInt(row.Suite, 10), row.Room) 
+                          ? getStudentsForRoom(buildingLower, suiteOrRoomStr, row.Room ?? "")
                           : [];
                       return (
                         <>
                           <tr key={rowIndex} className={rowClass}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                               {isRoomMatching && studentsInRoom.length > 0 && (
                                 <button
                                   onClick={() => toggleExpandedRow(roomKey)}
-                                  className="flex items-center justify-center p-1 bg-blue-100 rounded-full"
+                                  className="flex items-center justify-center gap-0.5 p-1.5 bg-brand-100 rounded-full hover:bg-brand-200 transition-colors"
                                   title="Current students in this room"
                                 >
-                                  <UserIcon size={16} className="text-blue-600" />
+                                  <UserIcon size={16} className="text-brand-600" />
                                   {expandedRows[roomKey] ? (
-                                    <ChevronUp size={16} className="text-blue-600 transition-transform" />
+                                    <ChevronUp size={16} className="text-brand-600 transition-transform" />
                                   ) : (
-                                    <ChevronDown size={16} className="text-blue-600 transition-transform" />
+                                    <ChevronDown size={16} className="text-brand-600 transition-transform" />
                                   )}
                                 </button>
                               )}
@@ -780,17 +831,17 @@ function DataImport() {
                             {selectedPreview.headers.map((header, colIndex) => (
                               <td
                                 key={`${rowIndex}-${colIndex}`}
-                                className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                                className="px-6 py-4 whitespace-nowrap text-sm text-slate-900"
                               >
                                 {row[header]?.toString() || ""}
                               </td>
                             ))}
                           </tr>
                           {expandedRows[roomKey] && isRoomMatching && !isNameMatching && studentsInRoom.length > 0 && (
-                            <tr className="bg-blue-50">
+                            <tr className="bg-brand-50/60">
                               <td colSpan={selectedPreview.headers.length + 1} className="px-6 py-4">
-                                <div className="pl-8 border-l-2 border-blue-300">
-                                  <h4 className="font-medium text-blue-800 mb-2">
+                                <div className="pl-8 border-l-2 border-brand-300">
+                                  <h4 className="font-medium text-brand-800 mb-2 text-sm">
                                     Current students in this room:
                                   </h4>
                                   <div className="space-y-2">
@@ -805,18 +856,18 @@ function DataImport() {
                                             handleStudentSelection(roomKey, student.id, rowIndex);
                                           }}
                                           checked={studentSelections[`${roomKey}-${rowIndex}`] === student.id}
-                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                          className="h-4 w-4 text-brand-600 focus:ring-brand-500"
                                         />
                                         <label
                                           htmlFor={`student-${roomKey}-${student.id}-${rowIndex}`}
-                                          className="text-sm text-gray-700 flex items-center gap-2"
+                                          className="text-sm text-slate-700 flex items-center gap-2"
                                         >
-                                          <UserIcon size={16} className="text-gray-500" />
+                                          <UserIcon size={16} className="text-slate-500" />
                                           <span>
-                                            {student.name} ({student.id})
+                                            {student.name}{student.studentUid ? ` · ${student.studentUid}` : ""}
                                           </span>
                                           {studentSelections[`${roomKey}-${rowIndex}`] === student.id && (
-                                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                            <span className="badge bg-brand-100 text-brand-800">
                                               Will be replaced
                                             </span>
                                           )}
@@ -836,22 +887,22 @@ function DataImport() {
                                             handleStudentSelection(roomKey, "-1", rowIndex);
                                           }}
                                           checked={studentSelections[`${roomKey}-${rowIndex}`] === "-1"}
-                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                          className="h-4 w-4 text-brand-600 focus:ring-brand-500"
                                         />
                                         <label
                                           htmlFor={`empty-slot-${roomKey}-${rowIndex}`}
-                                          className="text-sm text-gray-700 flex items-center gap-2"
+                                          className="text-sm text-slate-700 flex items-center gap-2"
                                         >
-                                          <UserIcon size={16} className="text-gray-500" />
-                                          <span className="text-xs text-dark">Empty slot</span>
-                                          <span className="text-xs bg-yellow-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                          <UserIcon size={16} className="text-slate-500" />
+                                          <span className="text-xs text-slate-800">Empty slot</span>
+                                          <span className="badge bg-yellow-100 text-yellow-800">
                                             Available slot!
                                           </span>
                                         </label>
                                       </div>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-2">
+                                  <p className="text-xs text-slate-500 mt-2">
                                     Select the student that will be replaced by the new import data.
                                   </p>
                                 </div>
@@ -866,12 +917,12 @@ function DataImport() {
               </div>
   
               {hasMoreRows && (
-                <div className="p-4 border-t border-gray-200">
+                <div className="p-4 border-t border-slate-100">
                   <button
                     onClick={loadMoreRows}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-brand-600 hover:bg-brand-50 rounded-xl transition-colors text-sm font-medium"
                   >
-                    <ChevronDown size={20} />
+                    <ChevronDown size={18} />
                     Load More Records
                   </button>
                 </div>

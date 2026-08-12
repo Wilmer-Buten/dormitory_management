@@ -22,9 +22,9 @@ export const DateTimeDisplay: React.FC = () => {
 
   return (
     <div className="flex items-baseline gap-2 min-w-0">
-      <span className="hidden sm:inline text-sm font-medium text-slate-500 capitalize truncate">{dateLabel}</span>
-      <span className="hidden sm:inline text-slate-300">·</span>
-      <span className="text-sm font-semibold text-slate-800 tabular-nums whitespace-nowrap">{timeLabel}</span>
+      <span className="hidden sm:inline text-sm font-medium text-white/80 capitalize truncate">{dateLabel}</span>
+      <span className="hidden sm:inline text-white/40">·</span>
+      <span className="text-sm font-semibold text-white tabular-nums whitespace-nowrap">{timeLabel}</span>
     </div>
   )
 }

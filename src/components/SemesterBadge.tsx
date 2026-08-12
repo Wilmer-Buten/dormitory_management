@@ -42,29 +42,26 @@ export default function SemesterBadge() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
-        <Loader2 size={14} className="animate-spin text-slate-400" />
-        <span className="text-xs text-slate-500">Loading...</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-white/15 rounded-lg">
+        <Loader2 size={14} className="animate-spin text-white/80" />
+        <span className="text-xs text-white/80">Loading...</span>
       </div>
     );
   }
 
   if (!activeSemester) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <AlertTriangle size={14} className="text-yellow-600" />
-        <span className="text-xs text-yellow-700">No semester</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-oakwood-gold/20 border border-oakwood-gold/40 rounded-lg">
+        <AlertTriangle size={14} className="text-oakwood-gold" />
+        <span className="text-xs text-oakwood-gold-light">No semester</span>
       </div>
     );
   }
 
   const termLabel = activeSemester.term === 'spring' ? 'Spring' : 'Fall';
-  const termColor = activeSemester.term === 'spring' 
-    ? 'bg-oakwood-blue-50 text-oakwood-blue border-oakwood-blue-200' 
-    : 'bg-oakwood-gold-50 text-oakwood-gold-dark border-oakwood-gold-300';
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg shadow-sm ${termColor}`}>
+    <div className="flex items-center gap-2 px-3 py-1.5 border border-oakwood-gold/50 rounded-lg shadow-sm bg-oakwood-gold text-oakwood-blue-dark">
       <Calendar size={14} />
       <span className="text-xs font-semibold tracking-wide">{termLabel} {activeSemester.year}</span>
     </div>

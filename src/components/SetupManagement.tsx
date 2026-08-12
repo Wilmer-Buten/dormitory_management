@@ -7,8 +7,12 @@ import toast from 'react-hot-toast';
 import { useStore } from '../store/useStore';
 import SemesterManagement from './SemesterManagement';
 import DataImport from './DataImport';
+import CleanCheckDays from './CleanCheckDays';
+import { AccessRestricted } from './AccessRestricted';
 
 const API = import.meta.env.VITE_API_URL;
+
+type SetupTab = 'buildings' | 'semesters' | 'import' | 'cleanCheck';
 
 interface BuildingData {
   id: number;
@@ -54,13 +58,25 @@ function authHeader(token: string) {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 }
 
-export default function SetupManagement({ defaultTab = 'buildings' }: { defaultTab?: 'buildings' | 'semesters' | 'import' }) {
-  const { accessToken, currentUser } = useStore();
-  const [activeTab, setActiveTab] = useState<'buildings' | 'semesters' | 'import'>(defaultTab);
+export default function SetupManagement({ defaultTab = 'buildings' }: { defaultTab?: SetupTab }) {
+  const { accessToken, currentUser, getTranslation, setCurrentSection } = useStore();
+  const t = getTranslation();
+  const isSupervisor = currentUser?.role === 'supervisor';
+  const [activeTab, setActiveTab] = useState<SetupTab>(defaultTab);
 
   useEffect(() => {
     setActiveTab(defaultTab);
   }, [defaultTab]);
+
+  const selectTab = (tab: SetupTab) => {
+    setActiveTab(tab);
+    const section =
+      tab === 'buildings' ? 'setup' :
+      tab === 'semesters' ? 'semesters' :
+      tab === 'import' ? 'import' :
+      'cleanCheck';
+    setCurrentSection(section);
+  };
 
   const semesterButtonCallbackRef = useRef<(() => void) | null>(null);
   const [, forceUpdate] = useState({});
@@ -109,7 +125,10 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
     }
   }, [accessToken]);
 
-  useEffect(() => { fetchBuildings(); }, [fetchBuildings]);
+  useEffect(() => {
+    if (!isSupervisor) fetchBuildings();
+    else setLoading(false);
+  }, [fetchBuildings, isSupervisor]);
 
   const loadBuildingData = async (b: BuildingData) => {
     const id = b.id;
@@ -309,7 +328,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
     finally { setSaving(false); setDeleteConfirm(null); }
   };
 
-  if (loading) {
+  if (loading && activeTab === 'buildings' && !isSupervisor) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-oakwood-blue" />
@@ -317,62 +336,60 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
     );
   }
 
+  const tabClass = (tab: SetupTab) =>
+    `px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+      activeTab === tab
+        ? 'text-oakwood-blue border-b-2 border-oakwood-gold'
+        : 'text-slate-500 hover:text-slate-700'
+    }`;
+
   return (
     <div className="space-y-6">
       {/* Header with Tabs */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-oakwood-blue tracking-tight">Dormitory Setup</h1>
-        <p className="text-sm sm:text-base text-slate-600 mt-1">Manage buildings, suites, rooms and semesters</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-oakwood-blue tracking-tight">{t.menu.setup}</h1>
+        <p className="text-sm sm:text-base text-slate-600 mt-1">
+          {isSupervisor
+            ? 'Import residents and configure clean check weekdays for your building'
+            : 'Manage buildings, suites, rooms, imports and clean check days'}
+        </p>
         
-        <div className="flex items-center justify-between mt-4 border-b border-slate-200">
-          <div className="flex gap-2">
-            {currentUser?.role !== 'supervisor' && (
+        <div className="flex items-center justify-between mt-4 border-b border-slate-200 gap-3">
+          <div className="flex gap-1 sm:gap-2 overflow-x-auto">
+            {!isSupervisor && (
               <>
-                <button
-                  onClick={() => setActiveTab('buildings')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === 'buildings'
-                      ? 'text-oakwood-blue border-b-2 border-oakwood-gold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Buildings & Rooms
+                <button onClick={() => selectTab('buildings')} className={tabClass('buildings')}>
+                  {t.menu.dormitories}
                 </button>
-                <button
-                  onClick={() => setActiveTab('semesters')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === 'semesters'
-                      ? 'text-oakwood-blue border-b-2 border-oakwood-gold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
+                <button onClick={() => selectTab('semesters')} className={tabClass('semesters')}>
                   Semesters
                 </button>
               </>
             )}
-            <button
-              onClick={() => setActiveTab('import')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'import'
-                  ? 'text-oakwood-blue border-b-2 border-oakwood-gold'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Import Students
+            <button onClick={() => selectTab('import')} className={tabClass('import')}>
+              {t.menu.import}
             </button>
+            <button onClick={() => selectTab('cleanCheck')} className={tabClass('cleanCheck')}>
+              {t.menu.cleanCheck}
+            </button>
+            {isSupervisor && (
+              <button onClick={() => selectTab('buildings')} className={tabClass('buildings')}>
+                {t.menu.dormitories}
+              </button>
+            )}
           </div>
           
-          {activeTab === 'buildings' ? (
+          {!isSupervisor && activeTab === 'buildings' ? (
             <button
               onClick={() => setAddBuildingOpen(true)}
-              className="btn-primary btn-md text-sm mb-0.5"
+              className="btn-primary btn-md text-sm mb-0.5 shrink-0"
             >
               <Plus size={16} /> Add Building
             </button>
-          ) : activeTab === 'semesters' && semesterButtonCallbackRef.current ? (
+          ) : !isSupervisor && activeTab === 'semesters' && semesterButtonCallbackRef.current ? (
             <button
               onClick={semesterButtonCallbackRef.current}
-              className="btn-primary btn-md text-sm mb-0.5"
+              className="btn-primary btn-md text-sm mb-0.5 shrink-0"
             >
               <Plus size={16} /> Add Semester
             </button>
@@ -383,8 +400,14 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
       {/* Tab Content */}
       {activeTab === 'import' ? (
         <DataImport />
+      ) : activeTab === 'cleanCheck' ? (
+        <CleanCheckDays embedded />
       ) : activeTab === 'semesters' ? (
-        <SemesterManagement showInlineButton onAddClick={handleSemesterAddClick} />
+        isSupervisor ? <AccessRestricted /> : (
+          <SemesterManagement showInlineButton onAddClick={handleSemesterAddClick} />
+        )
+      ) : isSupervisor ? (
+        <AccessRestricted />
       ) : (
         <>
 

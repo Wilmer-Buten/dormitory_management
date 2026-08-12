@@ -18,6 +18,7 @@ import {
   ChevronsRight,
   FileText,
   Calendar,
+  Sparkles,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -32,7 +33,7 @@ interface LayoutProps {
   children: React.ReactNode
 }
 
-type Section = "dashboard" | "attendance" | "users" | "settings" | "import" | "setup" | "reports" | "students"
+type Section = "dashboard" | "attendance" | "users" | "settings" | "import" | "setup" | "reports" | "students" | "semesters" | "cleanCheck"
 type UsersRoleFilter = "all" | "admin" | "supervisor" | "staff"
 
 interface SubMenuItem {
@@ -84,11 +85,19 @@ export function Layout({ children }: LayoutProps) {
           { label: t.users.roles.staff, value: "staff" },
         ]
 
-  const setupSubItems: SubMenuItem[] = [
-    { label: t.menu.dormitories, value: "setup", icon: Building2 },
-    { label: "Semesters", value: "semesters", icon: Calendar },
-    { label: t.menu.import, value: "import", icon: FileSpreadsheet },
-  ]
+  const setupSubItems: SubMenuItem[] =
+    currentUser?.role === "supervisor"
+      ? [
+          { label: t.menu.import, value: "import", icon: FileSpreadsheet },
+          { label: t.menu.cleanCheck, value: "cleanCheck", icon: Sparkles },
+          { label: t.menu.dormitories, value: "setup", icon: Building2 },
+        ]
+      : [
+          { label: t.menu.dormitories, value: "setup", icon: Building2 },
+          { label: "Semesters", value: "semesters", icon: Calendar },
+          { label: t.menu.import, value: "import", icon: FileSpreadsheet },
+          { label: t.menu.cleanCheck, value: "cleanCheck", icon: Sparkles },
+        ]
 
   const menuItems: NavMenuItem[] =
     currentUser?.role === "staff"
@@ -360,12 +369,12 @@ export function Layout({ children }: LayoutProps) {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
         <header
-          className="flex-none flex items-center gap-3 px-4 sm:px-6 lg:px-8 h-16 bg-white border-b-2 border-oakwood-gold shadow-sm z-10"
+          className="flex-none flex items-center gap-3 px-4 sm:px-6 lg:px-8 h-16 bg-oakwood-blue border-b border-oakwood-blue-dark shadow-sm z-10"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="md:hidden p-2 -ml-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+            className="md:hidden p-2 -ml-2 text-white/90 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             aria-label="Open menu"
           >
             <Menu size={22} />

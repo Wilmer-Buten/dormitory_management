@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Toaster } from "react-hot-toast"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, Sparkles } from "lucide-react"
 import { SearchBar } from "../components/SearchBar"
 import { DateSelector } from "../components/DateSelector"
 import { ViewToggle } from "../components/ViewToggle"
@@ -24,6 +24,8 @@ function Attendance() {
     currentPage, 
     currentUser, 
     selectedStat,
+    selectedDate,
+    isCleanCheckDay,
     setEnableFetchRoomsQuery,
     onPageChange,
     setSelectedSuite,
@@ -34,6 +36,7 @@ function Attendance() {
     getFilteredRooms,
     setViewMode,
     getDefaultViewMode,
+    fetchCleanCheckStatus,
     isLoading
   } = useStore()
 
@@ -71,6 +74,10 @@ function Attendance() {
       }
     }
   }, [data, currentUser])
+
+  useEffect(() => {
+    void fetchCleanCheckStatus()
+  }, [selectedDate, selectedBuilding, fetchCleanCheckStatus])
 
   const t = getTranslation()
 
@@ -126,6 +133,25 @@ function Attendance() {
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{t.attendance.title}</h1>
         <p className="text-slate-500 text-sm sm:text-base mt-1">{t.attendance.subtitle}</p>
       </motion.div>
+
+      <AnimatePresence>
+        {isCleanCheckDay && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mb-5 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3.5 flex items-start gap-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="font-semibold text-teal-900 tracking-tight">{t.attendance.cleanCheckDayBanner}</p>
+              <p className="text-sm text-teal-700/90 mt-0.5">{t.attendance.cleanCheckDayHint}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mb-6">
         <Stats />

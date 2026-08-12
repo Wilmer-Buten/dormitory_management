@@ -26,18 +26,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ compact = false }) => 
         as={motion.div}
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 sm:px-3 sm:py-2 cursor-pointer hover:bg-slate-100 transition-colors"
+        className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 sm:px-3 sm:py-2 cursor-pointer hover:bg-white/10 transition-colors"
       >
-        <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+        <div className="w-9 h-9 rounded-full bg-oakwood-gold flex items-center justify-center text-oakwood-blue-dark font-semibold text-sm shrink-0">
           {currentUser.name.charAt(0).toUpperCase()}
         </div>
         {!compact && (
           <div className="hidden sm:block text-left">
-            <p className="text-xs text-slate-500 leading-none">{t.welcome},</p>
-            <p className="font-semibold text-slate-800 text-sm leading-tight">{[currentUser.name, currentUser.lastname].filter(Boolean).join(" ")}</p>
+            <p className="text-xs text-white/70 leading-none">{t.welcome},</p>
+            <p className="font-semibold text-white text-sm leading-tight">{[currentUser.name, currentUser.lastname].filter(Boolean).join(" ")}</p>
           </div>
         )}
-        <ChevronDown size={15} className="hidden sm:block text-slate-400" />
+        <ChevronDown size={15} className="hidden sm:block text-white/70" />
       </Menu.Button>
       <Transition
         enter="transition ease-out duration-100"

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, X, Clock, Pencil, Trash2, Eye, DoorOpen, Plus } from "lucide-react";
+import { Check, X, Clock, Pencil, Trash2, Eye, DoorOpen, Plus, Sparkles } from "lucide-react";
 import { Room } from "../types";
 import { useStore } from "../store/useStore";
 import { useMutation } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ interface RoomCardProps {
 }
 
 export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
-  const { getTranslation, setIsLoading, addStudent, updateStudentPresence, deleteStudent } = useStore();
+  const { getTranslation, setIsLoading, addStudent, updateStudentPresence, deleteStudent, updateRoomCleanliness } = useStore();
   const t = getTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -23,6 +23,11 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
   const [newStudentUid, setNewStudentUid] = useState("");
   const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingClean, setIsUpdatingClean] = useState(false);
+
+  const showCleanCheck = room.isCleanCheckDay === true || room.isCleanCheckDay === 1;
+  const roomIsClean = room.isClean === true || room.isClean === 1;
+  const roomIsDirty = room.isClean === false || room.isClean === 0;
 
   const mutation = useMutation({
     mutationFn: ({
@@ -292,6 +297,65 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, isLoading }) => {
                       </div>
                     )
                   })
+                )}
+
+                {showCleanCheck && (
+                  <div className="pt-1 border-t border-slate-100">
+                    <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-teal-50/70 border border-teal-100">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Sparkles size={14} className="text-teal-600 shrink-0" />
+                        <span className="text-xs font-medium text-teal-800 truncate">
+                          {t.attendance.cleanCheckDayBanner}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          type="button"
+                          disabled={isUpdatingClean}
+                          title={t.attendance.clean}
+                          onClick={async () => {
+                            if (roomIsClean) return;
+                            setIsUpdatingClean(true);
+                            try {
+                              await updateRoomCleanliness(room.id, true);
+                            } finally {
+                              setIsUpdatingClean(false);
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            roomIsClean
+                              ? "bg-teal-600 text-white"
+                              : "bg-white text-slate-500 hover:bg-teal-100 hover:text-teal-700"
+                          }`}
+                        >
+                          {t.attendance.clean}
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          type="button"
+                          disabled={isUpdatingClean}
+                          title={t.attendance.notClean}
+                          onClick={async () => {
+                            if (roomIsDirty) return;
+                            setIsUpdatingClean(true);
+                            try {
+                              await updateRoomCleanliness(room.id, false);
+                            } finally {
+                              setIsUpdatingClean(false);
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            roomIsDirty
+                              ? "bg-orange-500 text-white"
+                              : "bg-white text-slate-500 hover:bg-orange-50 hover:text-orange-600"
+                          }`}
+                        >
+                          {t.attendance.notClean}
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </>

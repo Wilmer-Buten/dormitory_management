@@ -30,7 +30,8 @@ export const translations = {
       settings: 'Settings',
       import: 'Import Residents',
       setup: 'Setup',
-      dormitories: 'Dormitories'
+      dormitories: 'Dormitories',
+      cleanCheck: 'Clean Check Days'
     },
     accessRestricted: {
       title: 'Access Restricted',
@@ -59,7 +60,26 @@ export const translations = {
     },
     attendance: {
       title: 'Attendance',
-      subtitle: 'Check residents in and out, room by room'
+      subtitle: 'Check residents in and out, room by room',
+      cleanCheckDayBanner: 'Clean Check Day!',
+      cleanCheckDayHint: 'Mark each room as clean or not clean in addition to attendance.',
+      clean: 'Clean',
+      notClean: 'Not clean',
+      manageCleanCheckDays: 'Clean check days',
+      cleanCheckDaysTitle: 'Clean Check Days',
+      cleanCheckDaysSubtitle: 'Choose which weekdays require a clean check for this building. Those days repeat every week.',
+      saveCleanCheckWeekdays: 'Save weekdays',
+      noCleanCheckDays: 'No weekdays selected. Staff will not see clean check controls.',
+      cleanCheckWeekdaysSaved: 'Clean check weekdays saved',
+      weekdays: {
+        sunday: 'Sunday',
+        monday: 'Monday',
+        tuesday: 'Tuesday',
+        wednesday: 'Wednesday',
+        thursday: 'Thursday',
+        friday: 'Friday',
+        saturday: 'Saturday',
+      },
     },
     reports: {
       title: 'Reports',
@@ -246,7 +266,8 @@ export const translations = {
       settings: 'Ajustes',
       import: 'Importar Residentes',
       setup: 'Configuración',
-      dormitories: 'Dormitorios'
+      dormitories: 'Dormitorios',
+      cleanCheck: 'Días de Clean Check'
     },
     accessRestricted: {
       title: 'Acceso Restringido',
@@ -275,7 +296,26 @@ export const translations = {
     },
     attendance: {
       title: 'Asistencia',
-      subtitle: 'Marca la entrada y salida de residentes, habitación por habitación'
+      subtitle: 'Marca la entrada y salida de residentes, habitación por habitación',
+      cleanCheckDayBanner: '¡Día de Clean Check!',
+      cleanCheckDayHint: 'Marca cada habitación como limpia o no limpia además de la asistencia.',
+      clean: 'Limpio',
+      notClean: 'No limpio',
+      manageCleanCheckDays: 'Días de clean check',
+      cleanCheckDaysTitle: 'Días de Clean Check',
+      cleanCheckDaysSubtitle: 'Elige qué días de la semana requieren clean check en este edificio. Se repiten cada semana.',
+      saveCleanCheckWeekdays: 'Guardar días',
+      noCleanCheckDays: 'Ningún día seleccionado. El staff no verá controles de clean check.',
+      cleanCheckWeekdaysSaved: 'Días de clean check guardados',
+      weekdays: {
+        sunday: 'Domingo',
+        monday: 'Lunes',
+        tuesday: 'Martes',
+        wednesday: 'Miércoles',
+        thursday: 'Jueves',
+        friday: 'Viernes',
+        saturday: 'Sábado',
+      },
     },
     reports: {
       title: 'Reportes',
@@ -467,7 +507,8 @@ export const translations = {
       settings: 'Paramètres',
       import: 'Importer des Résidents',
       setup: 'Configuration',
-      dormitories: 'Dortoirs'
+      dormitories: 'Dortoirs',
+      cleanCheck: 'Jours de Clean Check'
     },
     accessRestricted: {
       title: 'Accès Restreint',
@@ -496,7 +537,26 @@ export const translations = {
     },
     attendance: {
       title: 'Présence',
-      subtitle: 'Enregistrez les entrées et sorties, chambre par chambre'
+      subtitle: 'Enregistrez les entrées et sorties, chambre par chambre',
+      cleanCheckDayBanner: 'Jour de Clean Check !',
+      cleanCheckDayHint: 'Marquez chaque chambre comme propre ou non, en plus de la présence.',
+      clean: 'Propre',
+      notClean: 'Pas propre',
+      manageCleanCheckDays: 'Jours de clean check',
+      cleanCheckDaysTitle: 'Jours de Clean Check',
+      cleanCheckDaysSubtitle: 'Choisissez les jours de la semaine où un clean check est requis pour ce bâtiment. Ils se répètent chaque semaine.',
+      saveCleanCheckWeekdays: 'Enregistrer les jours',
+      noCleanCheckDays: 'Aucun jour sélectionné. Le personnel ne verra pas les contrôles de clean check.',
+      cleanCheckWeekdaysSaved: 'Jours de clean check enregistrés',
+      weekdays: {
+        sunday: 'Dimanche',
+        monday: 'Lundi',
+        tuesday: 'Mardi',
+        wednesday: 'Mercredi',
+        thursday: 'Jeudi',
+        friday: 'Vendredi',
+        saturday: 'Samedi',
+      },
     },
     reports: {
       title: 'Rapports',

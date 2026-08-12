@@ -23,8 +23,14 @@ export interface Room {
   suiteNumber: number;
   suiteId: string; // Suite ID
   building: string;
+  buildingId?: number;
+  isClean?: boolean | null | 0 | 1;
+  isCleanCheckDay?: boolean | null | 0 | 1;
   students: Student[];
 }
+
+/** 0=Sunday .. 6=Saturday (same as Date.getDay()) */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface Suite {
   id: string;
@@ -133,6 +139,7 @@ export interface Translation {
     import: string;
     setup: string;
     dormitories: string;
+    cleanCheck: string;
   };
   accessRestricted: {
     title: string;
@@ -162,6 +169,25 @@ export interface Translation {
   attendance: {
     title: string;
     subtitle: string;
+    cleanCheckDayBanner: string;
+    cleanCheckDayHint: string;
+    clean: string;
+    notClean: string;
+    manageCleanCheckDays: string;
+    cleanCheckDaysTitle: string;
+    cleanCheckDaysSubtitle: string;
+    saveCleanCheckWeekdays: string;
+    noCleanCheckDays: string;
+    cleanCheckWeekdaysSaved: string;
+    weekdays: {
+      sunday: string;
+      monday: string;
+      tuesday: string;
+      wednesday: string;
+      thursday: string;
+      friday: string;
+      saturday: string;
+    };
   };
   reports: {
     title: string;

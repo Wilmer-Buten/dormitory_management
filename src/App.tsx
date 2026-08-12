@@ -8,7 +8,6 @@ import UserManagement from "./components/UserManagement";
 import { SettingsComponent } from "./components/SettingsComponent";
 import DataImport from './components/DataImport';
 import SetupManagement from './components/SetupManagement';
-import { AccessRestricted } from './components/AccessRestricted';
 import { Login } from "./components/Login";
 import Reports from './components/Reports';
 import Students from './components/Students';
@@ -47,9 +46,11 @@ function App() {
       case 'import':
         return <SetupManagement defaultTab="import" />;
       case 'setup':
-        return currentUser?.role === 'supervisor' ? <AccessRestricted /> : <SetupManagement defaultTab="buildings" />;
+        return <SetupManagement defaultTab="buildings" />;
       case 'semesters':
-        return currentUser?.role === 'supervisor' ? <AccessRestricted /> : <SetupManagement defaultTab="semesters" />;
+        return <SetupManagement defaultTab="semesters" />;
+      case 'cleanCheck':
+        return <SetupManagement defaultTab="cleanCheck" />;
       default:
         return <Attendance />;
     }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Room, User, Suite, Building, Language, AttendanceReport } from '../types';
+import { Room, User, Suite, Building, Language, AttendanceReport, Weekday } from '../types';
 import { translations } from '../i18n/translations';
 import toast from 'react-hot-toast';
 
@@ -19,18 +19,19 @@ interface Store {
   isLoading: boolean;
   accessToken: string;
   isAuthenticated: boolean;
-  currentSection: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students';
+  currentSection: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students' | 'semesters' | 'cleanCheck';
   enableFetchRoomsQuery: boolean;
   enableFetchUsersQuery: boolean;
   selectedStat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending';
   usersRoleFilter: 'all' | 'admin' | 'supervisor' | 'staff';
+  isCleanCheckDay: boolean;
   err: string | null;
   theme: 'light' | 'dark';
   setSelectedStat: (stat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending') => void;
   setUsersRoleFilter: (role: 'all' | 'admin' | 'supervisor' | 'staff') => void;
   setTheme: (theme: 'light' | 'dark') => void;
   onPageChange: (page: number) => void
-  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students') => void;
+  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students' | 'semesters' | 'cleanCheck') => void;
   setSearchQuery: (query: string) => void;
   setSelectedDate: (date: string) => void;
   setCurrentUser: (user: User) => void;
@@ -39,6 +40,10 @@ interface Store {
   setSelectedBuilding: (building: string) => void;
   setLanguage: (lang: Language) => void;
   updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0 | null, inRoom: boolean | null) => Promise<void>;
+  updateRoomCleanliness: (roomId: string, isClean: boolean) => Promise<void>;
+  fetchCleanCheckStatus: () => Promise<boolean>;
+  fetchCleanCheckWeekdays: (buildingId: number) => Promise<Weekday[]>;
+  saveCleanCheckWeekdays: (buildingId: number, weekdays: Weekday[]) => Promise<void>;
   fetchRooms: () => Promise<Room[] | undefined>;
   fetchBuildings: () => Promise<Building[]>;
   fetchAttendanceReport: (params: { startDate: string; endDate: string; buildingId?: number | null }) => Promise<AttendanceReport>;
@@ -151,6 +156,7 @@ export const useStore = create<Store>((set, get) => ({
   accessToken: '',
   selectedStat: 'all',
   usersRoleFilter: 'all',
+  isCleanCheckDay: false,
   onPageChange: (page) => set({ currentPage: page }),
   setUsersRoleFilter: (role) => set({ usersRoleFilter: role }),
   setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode, selectedSuite: null, searchQuery: '' }),
@@ -158,7 +164,7 @@ export const useStore = create<Store>((set, get) => ({
   setEnableFetchUsersQuery: (enable) => set({ enableFetchUsersQuery: enable }),
   setError: (err) => set({ err }),
   setSearchQuery: (query) => set({ searchQuery: query }),
-  setSelectedDate: (date) => {set({ selectedDate: date, selectedStat: 'all', searchQuery: '' })},
+  setSelectedDate: (date) => {set({ selectedDate: date, selectedStat: 'all', searchQuery: '', isCleanCheckDay: false })},
   setAccessToken: (accessToken) => set({ accessToken: accessToken }),
   setCurrentUser: (user) => set({ currentUser: user, currentSection: user.role === 'staff' ? 'attendance' : 'dashboard' }),
   setViewMode: (mode) => set({ viewMode: mode, selectedSuite: null, selectedStat: 'all', searchQuery: '', currentPage: 1 }),
@@ -166,7 +172,7 @@ export const useStore = create<Store>((set, get) => ({
   setLanguage: (lang) => set({ language: lang }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme: theme }),
-  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students') => set((state) => ({
+  setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students' | 'semesters' | 'cleanCheck') => set((state) => ({
     currentSection: section,
     currentPage: 1,
     viewMode: section === 'attendance' ? state.getDefaultViewMode() : 'rooms',
@@ -178,6 +184,7 @@ export const useStore = create<Store>((set, get) => ({
     if (currentUserBuildingId === null || currentUserBuildingId === undefined) {
       set({ selectedBuilding: building, currentPage: 1, selectedStat: 'all', searchQuery: '' })
       set({ viewMode: get().getDefaultViewMode() })
+      void get().fetchCleanCheckStatus()
     } else {
       toast.error(get().getTranslation().forbidden);
     }
@@ -194,10 +201,76 @@ export const useStore = create<Store>((set, get) => ({
       const matchedBuilding = get().buildings.find((b) => b.id === userBuildingId);
       set({ selectedBuilding: matchedBuilding ? matchedBuilding.name : 'all' });
       set({ isLoading: false, enableFetchRoomsQuery: false });
+      await get().fetchCleanCheckStatus();
       return data as Room[] | undefined; // Might return undefined
     } catch (error) {
       set({ err: (error as Error).message, isLoading: false });
       toast.error('Error loading rooms');
+    }
+  },
+
+  fetchCleanCheckStatus: async () => {
+    try {
+      const date = get().selectedDate;
+      const buildingName = get().selectedBuilding;
+      const building = get().buildings.find((b) => b.name === buildingName);
+      const buildingId = get().currentUser?.building_id ?? building?.id;
+      const params = new URLSearchParams({ date });
+      if (buildingId) params.set('building_id', String(buildingId));
+      const response = await fetchWithAuth(`${API_URL}/clean-check-days/status?${params}`, {}, get, set);
+      if (!response.ok) throw new Error('Failed to fetch clean check status');
+      const data = await response.json();
+      set({ isCleanCheckDay: !!data.isCleanCheckDay });
+      return !!data.isCleanCheckDay;
+    } catch {
+      set({ isCleanCheckDay: false });
+      return false;
+    }
+  },
+
+  fetchCleanCheckWeekdays: async (buildingId: number) => {
+    const response = await fetchWithAuth(
+      `${API_URL}/clean-check-weekdays?building_id=${buildingId}`,
+      {},
+      get,
+      set
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch clean check weekdays');
+    return (data.weekdays ?? []) as Weekday[];
+  },
+
+  saveCleanCheckWeekdays: async (buildingId: number, weekdays: Weekday[]) => {
+    const t = get().getTranslation();
+    const response = await fetchWithAuth(`${API_URL}/clean-check-weekdays`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ building_id: buildingId, weekdays }),
+    }, get, set);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to save clean check weekdays');
+    toast.success(t.attendance.cleanCheckWeekdaysSaved);
+    await get().fetchCleanCheckStatus();
+    set({ enableFetchRoomsQuery: true });
+  },
+
+  updateRoomCleanliness: async (roomId: string, isClean: boolean) => {
+    try {
+      const response = await fetchWithAuth(`${API_URL}/rooms/${roomId}/cleanliness`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isClean, date: get().selectedDate }),
+      }, get, set);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Failed to update cleanliness');
+      set((state) => ({
+        rooms: state.rooms.map((room) =>
+          room.id === roomId ? { ...room, isClean } : room
+        ),
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update cleanliness');
+      throw error;
     }
   },
 

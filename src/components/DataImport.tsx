@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useStore } from "../store/useStore";
 import {
   Upload,
@@ -12,118 +12,188 @@ import {
   UserIcon,
   ChevronUp,
   FileDown,
+  Trash2,
 } from "lucide-react";
 import { read, utils, writeFile } from "xlsx";
 import toast, { Toaster } from "react-hot-toast";
 import type { PreviewData } from "../types";
 import ModalComponent from "./ModalComponent";
 
+const MAX_STUDENTS_PER_ROOM = 2;
+const VALID_ROOM_LETTERS = ["A", "B", "C", "D"];
+
+const normalizeLetter = (letter: unknown) =>
+  letter == null || String(letter).trim() === ""
+    ? ""
+    : String(letter).trim().toUpperCase();
+
+const normalizeSuite = (value: unknown) => {
+  if (value == null || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+  const raw = String(value).trim();
+  if (!raw) return "";
+  const num = Number(raw);
+  if (!Number.isNaN(num) && Number.isFinite(num)) return String(Math.trunc(num));
+  return raw;
+};
+
+const normalizeExcelRow = (row: Record<string, any>) => {
+  const headerMap: Record<string, string> = {
+    name: "Name",
+    lastname: "Lastname",
+    "last name": "Lastname",
+    last_name: "Lastname",
+    id: "ID",
+    studentid: "ID",
+    "student id": "ID",
+    student_id: "ID",
+    building: "Building",
+    suite: "Suite",
+    room: "Room",
+  };
+  const normalized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(row)) {
+    const mapped = headerMap[String(key).trim().toLowerCase()] || String(key).trim();
+    normalized[mapped] = value;
+  }
+  return {
+    Name: normalized.Name != null ? String(normalized.Name).trim() : "",
+    Lastname: normalized.Lastname != null ? String(normalized.Lastname).trim() : "",
+    ID:
+      normalized.ID != null && String(normalized.ID).trim() !== ""
+        ? String(normalized.ID).trim()
+        : null,
+    Building: normalized.Building != null ? String(normalized.Building).trim() : "",
+    Suite: normalizeSuite(normalized.Suite),
+    Room:
+      normalized.Room != null && String(normalized.Room).trim() !== ""
+        ? normalizeLetter(normalized.Room)
+        : "",
+  };
+};
+
+const rowFullName = (row: { Name?: string; Lastname?: string }) =>
+  [row.Name, row.Lastname].filter(Boolean).join(" ").trim();
+
 function DataImport() {
-  const { getTranslation, importStudents, rooms, isLoading, currentUser, buildings, fetchBuildings, accessToken } = useStore();
+  const {
+    getTranslation,
+    importStudents,
+    rooms,
+    isLoading,
+    currentUser,
+    buildings,
+    fetchBuildings,
+    fetchRooms,
+    accessToken,
+  } = useStore();
   const t = getTranslation();
 
   useEffect(() => {
     fetchBuildings();
-  }, [fetchBuildings]);
+    fetchRooms();
+  }, [fetchBuildings, fetchRooms]);
+
   const [dragActive, setDragActive] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string>("");
   const [matchingStudents, setMatchingStudents] = useState<any[]>([]);
   const [matchingNames, setMatchingNames] = useState<any[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [studentSelections, setStudentSelections] = useState<
-    Record<string, string>
-  >({});
+  const [studentSelections, setStudentSelections] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+  const studentSelectionsRef = useRef(studentSelections);
+  studentSelectionsRef.current = studentSelections;
 
   const processExcelFile = async (file: File) => {
     try {
       const data = await file.arrayBuffer();
       const workbook = read(data);
-      const preview: PreviewData[] = [];
       const sheetName = "Students";
       const sheet = workbook.Sheets[sheetName];
-  
-      if (sheet) {
-        const allRows = utils.sheet_to_json(sheet);
-  
-        // Verify that required columns exist (Name, Building, Suite are required; Room is optional for standalone)
-        if (
-          allRows.length === 0 ||
-          !["Name", "Building", "Suite"].every((key) =>
-            Object.keys(allRows[0]).includes(key)
-          )
-        ) {
-          throw new Error(
-            toast.error(
-              t.import.columnError
-            )
-          );
-        }
-  
-        // Filtrar filas vacías y mapear datos
-        const currentUserBuilding = currentUser?.building_id
-          ? buildings.find((b) => b.id === currentUser.building_id)?.name
-          : null; // null building_id (admin) = no building restriction
-        const filteredRows = allRows
-          .filter((row) =>
-            Object.values(row as any).some(
-              (value) =>
-                value !== null &&
-                value !== undefined &&
-                value !== "" &&
-                !(typeof value === "string" && value.trim() === "")
-            )
-          ).filter((row: any)=> {
-            if(!currentUserBuilding || row.Building.toLowerCase() === currentUserBuilding)
-            {
-              return true;
-            }
-            toast.error(t.import.ignoredRecord + ": " + row.Name);
-            return false;
-          })
-          .map((row) => {
-            const { Name, ID, Building, Suite, Room } = row as any;
-            return { Name, ID: ID ?? null, Building, Suite, Room };
-          });
-        const headers =
-          filteredRows.length > 0 ? Object.keys(filteredRows[0]) : [];
-        preview.push({
+
+      if (!sheet) {
+        toast.error(t.import.sheetMissing);
+        return;
+      }
+
+      const rawRows = utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+      if (rawRows.length === 0) {
+        toast.error(t.import.columnError);
+        return;
+      }
+
+      const firstKeys = Object.keys(rawRows[0]).map((k) => String(k).trim().toLowerCase());
+      const hasName = firstKeys.includes("name");
+      const hasLastname = firstKeys.includes("lastname") || firstKeys.includes("last name") || firstKeys.includes("last_name");
+      const hasBuilding = firstKeys.includes("building");
+      const hasSuite = firstKeys.includes("suite");
+      if (!hasName || !hasLastname || !hasBuilding || !hasSuite) {
+        toast.error(t.import.columnError);
+        return;
+      }
+
+      const currentUserBuilding = currentUser?.building_id
+        ? buildings.find((b) => b.id === currentUser.building_id)?.name
+        : null;
+
+      const filteredRows = rawRows
+        .map((row) => normalizeExcelRow(row))
+        .filter((row) => row.Name || row.Lastname || row.Building || row.Suite || row.Room || row.ID)
+        .filter((row) => {
+          if (!row.Building) return true; // keep; row validator will flag it
+          const userBuilding = currentUserBuilding?.toLowerCase() ?? null;
+          if (!userBuilding || row.Building.toLowerCase() === userBuilding) return true;
+          toast.error(`${t.import.ignoredRecord}: ${rowFullName(row) || "(no name)"}`);
+          return false;
+        });
+
+      if (filteredRows.length === 0) {
+        toast.error(t.import.noValidRows);
+        return;
+      }
+
+      const headers = ["Name", "Lastname", "ID", "Building", "Suite", "Room"];
+      setPreviewData([
+        {
           sheet: sheetName,
           headers,
           rows: filteredRows.slice(0, 10),
           allRows: filteredRows,
           currentPage: 1,
           rowsPerPage: 10,
-        });
-      } else {
-        throw new Error(
-          toast.error(
-            "The 'Students' sheet was not found in the workbook. Please make sure your Excel file contains a sheet named 'Students'."
-          )
-        );
-      }
-  
-      setPreviewData(preview);
-      if (preview.length > 0) {
-        setSelectedSheet(preview[0].sheet);
-      }
-    } catch (error) {
+        },
+      ]);
+      setSelectedSheet(sheetName);
+      setStudentSelections({});
+      setExpandedRows({});
+      setRowErrors({});
+    } catch {
       toast.error(t.import.error);
     }
   };
-  
 
   useEffect(() => {
     if (previewData.length > 0 && selectedSheet) {
-      const selectedPreview = previewData.find(
-        (p) => p.sheet === selectedSheet
-      );
+      const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
       if (selectedPreview) {
-        checkForMatches(selectedPreview.allRows);
+        checkForMatches(selectedPreview.allRows, true);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewData, selectedSheet]);
+
+  // Re-validate when room catalog finishes loading (keep current radio selections).
+  useEffect(() => {
+    if (previewData.length > 0 && selectedSheet) {
+      const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
+      if (selectedPreview) {
+        checkForMatches(selectedPreview.allRows, false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms, buildings]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -173,97 +243,205 @@ function DataImport() {
     );
   };
 
-  const checkForMatches = (data: any[]) => {
-    const buildingList = buildings.map((b) => b.name);
-    const validLetters = ["A", "B", "C", "D"];
-    const err = {
-      suite: "",
-      room: "",
-      building: "",
-    };
+  const getBuildingLayout = useCallback(
+    (buildingName: string) =>
+      buildings.find((b) => b.name.toLowerCase() === buildingName.toLowerCase())?.layout_type ?? null,
+    [buildings]
+  );
 
-    // Helper: get building layout type
-    const getBuildingLayout = (buildingName: string) =>
-      buildings.find((b) => b.name === buildingName.toLowerCase())?.layout_type ?? 'suite';
-  
-    // Filtrar solo las filas que tienen datos válidos en las columnas esperadas
+  const lettersMatch = (a: unknown, b: unknown) =>
+    normalizeLetter(a) !== "" && normalizeLetter(a) === normalizeLetter(b);
+
+  const findStoreRoom = useCallback(
+    (buildingName: string, suiteOrRoom: string, roomLetter: string) => {
+      const buildingLower = buildingName.toLowerCase();
+      const layout = getBuildingLayout(buildingLower);
+      if (!layout) return undefined;
+      if (layout === "standalone") {
+        return rooms.find(
+          (room) =>
+            room.building.toLowerCase() === buildingLower &&
+            String(room.roomNumber ?? "") === suiteOrRoom
+        );
+      }
+      return rooms.find(
+        (room) =>
+          room.building.toLowerCase() === buildingLower &&
+          Number(room.suiteNumber) === Number(suiteOrRoom) &&
+          lettersMatch(room.letter, roomLetter)
+      );
+    },
+    [rooms, getBuildingLayout]
+  );
+
+  const standaloneRoomNumber = (row: any) =>
+    normalizeSuite(row.Room) || normalizeSuite(row.Suite);
+
+  const roomKeyForRow = (row: any) => {
+    const buildingLower = String(row.Building || "").toLowerCase();
+    const layout = getBuildingLayout(buildingLower);
+    if (layout === "standalone") {
+      return `${buildingLower}-${standaloneRoomNumber(row)}-`;
+    }
+    return `${buildingLower}-${normalizeSuite(row.Suite)}-${normalizeLetter(row.Room)}`;
+  };
+
+  const isYellowNameMatch = useCallback(
+    (row: any, nameMatches: any[]) => {
+      if (!row.Name || !row.Lastname) return false;
+      const buildingLower = String(row.Building || "").toLowerCase();
+      const isStandalone = getBuildingLayout(buildingLower) === "standalone";
+      const suiteOrRoom = isStandalone ? standaloneRoomNumber(row) : normalizeSuite(row.Suite);
+      const roomLetter = normalizeLetter(row.Room);
+      return nameMatches.some((match) => {
+        const matchStandalone = getBuildingLayout(String(match.Building || "")) === "standalone";
+        const matchSuiteOrRoom = matchStandalone
+          ? standaloneRoomNumber(match)
+          : normalizeSuite(match.Suite);
+        return (
+          match.Name &&
+          match.Lastname &&
+          match.Name.toLowerCase() === row.Name.toLowerCase() &&
+          match.Lastname.toLowerCase() === row.Lastname.toLowerCase() &&
+          String(match.Building || "").toLowerCase() === buildingLower &&
+          matchSuiteOrRoom === suiteOrRoom &&
+          (isStandalone || normalizeLetter(match.Room) === roomLetter)
+        );
+      });
+    },
+    [getBuildingLayout]
+  );
+
+  const validateRows = useCallback(
+    (data: any[], nameMatches: any[], selections: Record<string, string>) => {
+      const errors: Record<number, string> = {};
+      const uidFirstIndex = new Map<string, number>();
+      const projectedOccupancy = new Map<string, number>();
+
+      data.forEach((row, index) => {
+        const buildingLower = String(row.Building || "").toLowerCase();
+        const layout = buildingLower ? getBuildingLayout(buildingLower) : null;
+        const isStandalone = layout === "standalone";
+        const suiteOrRoom = isStandalone
+          ? standaloneRoomNumber(row)
+          : normalizeSuite(row.Suite);
+        const roomLetter = isStandalone ? "" : normalizeLetter(row.Room);
+
+        if (!row.Name) {
+          errors[index] = t.import.rowErrors.nameRequired;
+          return;
+        }
+        if (!row.Lastname) {
+          errors[index] = t.import.rowErrors.lastnameRequired;
+          return;
+        }
+        if (!buildingLower) {
+          errors[index] = t.import.rowErrors.buildingRequired;
+          return;
+        }
+        if (!layout) {
+          errors[index] = t.import.rowErrors.buildingNotFound.replace("{building}", row.Building);
+          return;
+        }
+        if (!suiteOrRoom) {
+          errors[index] = isStandalone
+            ? t.import.rowErrors.roomNumberRequired
+            : t.import.rowErrors.suiteRequired;
+          return;
+        }
+        if (isStandalone) {
+          if (!/^\d{1,3}$/.test(suiteOrRoom)) {
+            errors[index] = t.import.rowErrors.roomNumberRequired;
+            return;
+          }
+        } else {
+          if (!/^\d{1,3}$/.test(suiteOrRoom)) {
+            errors[index] = t.import.rowErrors.suiteInvalid;
+            return;
+          }
+          if (!roomLetter || !VALID_ROOM_LETTERS.includes(roomLetter)) {
+            errors[index] = t.import.rowErrors.roomLetterInvalid;
+            return;
+          }
+        }
+
+        const storeRoom = findStoreRoom(buildingLower, suiteOrRoom, roomLetter);
+        if (!storeRoom) {
+          errors[index] = isStandalone
+            ? t.import.rowErrors.roomNotFound
+                .replace("{room}", suiteOrRoom)
+                .replace("{building}", row.Building)
+            : t.import.rowErrors.suiteRoomNotFound
+                .replace("{suite}", suiteOrRoom)
+                .replace("{room}", roomLetter)
+                .replace("{building}", row.Building);
+          return;
+        }
+
+        if (row.ID) {
+          const uid = String(row.ID);
+          if (uidFirstIndex.has(uid)) {
+            errors[index] = t.import.rowErrors.duplicateIdInFile
+              .replace("{id}", uid)
+              .replace("{row}", String((uidFirstIndex.get(uid) ?? 0) + 1));
+            return;
+          }
+          uidFirstIndex.set(uid, index);
+        }
+
+        if (isYellowNameMatch(row, nameMatches)) return;
+
+        const key = roomKeyForRow(row);
+        if (!projectedOccupancy.has(key)) {
+          const activeCount = (storeRoom.students || []).filter((s) => s.id != null).length;
+          projectedOccupancy.set(key, activeCount);
+        }
+
+        const selection = selections[`${key}-${index}`];
+        const isOverwrite = selection && selection !== "-1";
+        if (!isOverwrite) {
+          const next = (projectedOccupancy.get(key) || 0) + 1;
+          projectedOccupancy.set(key, next);
+          if (next > MAX_STUDENTS_PER_ROOM) {
+            errors[index] = t.import.rowErrors.roomCapacity
+              .replace("{max}", String(MAX_STUDENTS_PER_ROOM));
+          }
+        }
+      });
+
+      return errors;
+    },
+    [findStoreRoom, getBuildingLayout, isYellowNameMatch, t.import.rowErrors]
+  );
+
+  const checkForMatches = (data: any[], resetSelections: boolean) => {
     const validRows = data.filter((row) => {
-      const hasRequiredFields =
-        row.Name || row.Building || row.Suite || row.Room;
       const containsValidationRules = Object.values(row).some(
         (value) => typeof value === "string" && value.includes("VALIDATION RULES")
       );
-      return hasRequiredFields && !containsValidationRules;
+      return !containsValidationRules;
     });
-  
-    // Check for room matches (red highlight)
-    const roomMatches = validRows.filter((row) => {
-      const rowNum = row.__rowNum_;
-      const buildingLower = row.Building
-        ? row.Building.toString().toLowerCase()
-        : "";
-      const layoutType = getBuildingLayout(buildingLower);
-      const isStandalone = layoutType === 'standalone';
-      const suiteOrRoom = row.Suite ? row.Suite.toString().trim() : "";
-  
-      // Validate building
-      if (!buildingLower || buildingList.indexOf(buildingLower) === -1) {
-        err.building = "It seems that a building field is invalid (see row " + rowNum + ")";
-      } else if (!suiteOrRoom) {
-        err.suite = "It seems that a suite/room field is empty (see row " + rowNum + ")";
-      } else if (!isStandalone) {
-        // Suite-based: validate suite number format
-        const suiteNumber = parseInt(suiteOrRoom, 10);
-        if (isNaN(suiteNumber) || suiteOrRoom.length > 3) {
-          err.suite = "It seems that a suite field is invalid (see row " + rowNum + ")";
-        } else if (
-          !row.Room ||
-          row.Room.toString().trim().length !== 1 ||
-          validLetters.indexOf(row.Room.toString().trim()) === -1
-        ) {
-          err.room = "It seems that a room field is empty or invalid (see row " + rowNum + ")";
-        }
-      }
-  
-      if (err.suite.length > 0 || err.room.length > 0 || err.building.length > 0) {
-        toast.error(err.suite + " " + err.room + " " + err.building);
-        setPreviewData([]);
-        setSelectedSheet("");
-        return false;
-      }
 
-      if (isStandalone) {
-        // For standalone: match by room.number
-        return rooms.some(
-          (room) =>
-            room.building.toLowerCase() === buildingLower &&
-            (room as any).roomNumber?.toString() === suiteOrRoom &&
-            room.students &&
-            room.students[0] &&
-            room.students[0].id !== null
-        );
-      } else {
-        const suiteNumber = parseInt(suiteOrRoom, 10);
-        return rooms.some(
-          (room) =>
-            room.suiteNumber === suiteNumber &&
-            (room.letter || '').trim() === row.Room &&
-            room.building.toLowerCase() === buildingLower &&
-            room.students &&
-            room.students[0] &&
-            room.students[0].id !== null
-        );
-      }
+    const roomMatches = validRows.filter((row) => {
+      const buildingLower = String(row.Building || "").toLowerCase();
+      const isStandalone = getBuildingLayout(buildingLower) === "standalone";
+      const suiteOrRoom = isStandalone
+        ? standaloneRoomNumber(row)
+        : normalizeSuite(row.Suite);
+      const roomLetter = isStandalone ? "" : normalizeLetter(row.Room);
+      const storeRoom = findStoreRoom(buildingLower, suiteOrRoom, roomLetter);
+      if (!storeRoom?.students?.length) return false;
+      return storeRoom.students.some((student) => student.id != null);
     });
-  
-    // Check for name matches (yellow highlight)
+
     const nameMatches = validRows.filter((row) => {
-      if (!row.Name) return false;
-      const buildingLower = row.Building?.toString().toLowerCase() ?? "";
-      const layoutType = getBuildingLayout(buildingLower);
-      const isStandalone = layoutType === 'standalone';
-      const suiteOrRoom = row.Suite ? row.Suite.toString().trim() : "";
-      
+      if (!row.Name || !row.Lastname) return false;
+      const buildingLower = String(row.Building || "").toLowerCase();
+      const isStandalone = getBuildingLayout(buildingLower) === "standalone";
+      const suiteOrRoom = isStandalone
+        ? standaloneRoomNumber(row)
+        : normalizeSuite(row.Suite);
+      const roomLetter = isStandalone ? "" : normalizeLetter(row.Room);
       return rooms.some(
         (room) =>
           room.students &&
@@ -271,113 +449,64 @@ function DataImport() {
             (student) =>
               student.name &&
               student.name.toLowerCase() === row.Name.toLowerCase() &&
+              String(student.lastname || "").toLowerCase() === row.Lastname.toLowerCase() &&
+              room.building.toLowerCase() === buildingLower &&
               (isStandalone
-                ? (room as any).roomNumber?.toString() === suiteOrRoom && room.building.toLowerCase() === buildingLower
-                : room.suiteNumber === parseInt(suiteOrRoom, 10)
-              )
+                ? String(room.roomNumber ?? "") === suiteOrRoom
+                : Number(room.suiteNumber) === Number(suiteOrRoom) &&
+                  lettersMatch(room.letter, roomLetter))
           )
       );
     });
-  
+
     setMatchingStudents(roomMatches);
     setMatchingNames(nameMatches);
-    
-    const initialSelections: Record<string, string> = {};
-    const initialExpandedRows: Record<string, boolean> = {};
-    roomMatches.forEach((match) => {
-      const buildingLower = match.Building.toString().toLowerCase();
-      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
-      const isStandalone = layoutType === 'standalone';
-      const suiteOrRoomStr = match.Suite ? match.Suite.toString().trim() : "";
-      const suiteNumber = isStandalone ? NaN : parseInt(suiteOrRoomStr, 10);
 
-      // roomKey matches backend convention
-      const roomKey = isStandalone
-        ? `${buildingLower}-${suiteOrRoomStr}-`
-        : `${buildingLower}-${suiteOrRoomStr}-${match.Room}`;
-  
-      const isAlsoNameMatch = nameMatches.some(
-        (nameMatch) =>
-          nameMatch.Building.toLowerCase() === buildingLower &&
-          nameMatch.Suite?.toString().trim() === suiteOrRoomStr &&
-          (isStandalone || nameMatch.Room === match.Room) &&
-          nameMatch.Name.toLowerCase() === match.Name.toLowerCase()
-      );
-  
-      if (!isAlsoNameMatch) {
+    let selectionsForValidation = studentSelectionsRef.current;
+
+    if (resetSelections) {
+      const initialSelections: Record<string, string> = {};
+      const initialExpandedRows: Record<string, boolean> = {};
+
+      const byRoom = new Map<string, number[]>();
+      data.forEach((row, index) => {
+        if (!roomMatches.includes(row)) return;
+        if (isYellowNameMatch(row, nameMatches)) return;
+        const key = roomKeyForRow(row);
+        if (!byRoom.has(key)) byRoom.set(key, []);
+        byRoom.get(key)!.push(index);
+      });
+
+      byRoom.forEach((indexes, roomKey) => {
         initialExpandedRows[roomKey] = true;
-        const matchedRoom = rooms.find(
-          (room) =>
-            room.building.toLowerCase() === buildingLower &&
-            (isStandalone
-              ? (room as any).roomNumber?.toString() === suiteOrRoomStr
-              : room.suiteNumber === suiteNumber && (room.letter || '').trim() === match.Room
-            )
+        const sample = data[indexes[0]];
+        const sampleBuilding = String(sample.Building || "").toLowerCase();
+        const sampleStandalone = getBuildingLayout(sampleBuilding) === "standalone";
+        const storeRoom = findStoreRoom(
+          sampleBuilding,
+          sampleStandalone ? standaloneRoomNumber(sample) : normalizeSuite(sample.Suite),
+          sampleStandalone ? "" : normalizeLetter(sample.Room)
         );
-  
-        if (matchedRoom && matchedRoom.students && matchedRoom.students.length > 0) {
-          const existingRoomKey = Object.keys(initialSelections).find((key) => {
-            const [keyBuilding, keySuite, keyRoom] = key.split("-");
-            return (
-              keyBuilding === buildingLower &&
-              parseInt(keySuite, 10) === suiteNumber &&
-              keyRoom === match.Room
-            );
-          });
-  
-          const stdIndexes = selectedPreview?.rows
-            .map((row, index) => {
-              const rowBuildingLower = row.Building
-                ? row.Building.toString().toLowerCase()
-                : "";
-              const rowSuiteStr = row.Suite ? row.Suite.toString().trim() : "";
-              const isStandaloneRow = buildings.find((b) => b.name === rowBuildingLower)?.layout_type === 'standalone';
-              const isNameMatch = nameMatches.some(
-                (nameMatch) =>
-                  nameMatch.Building.toLowerCase() === rowBuildingLower &&
-                  nameMatch.Suite?.toString().trim() === rowSuiteStr &&
-                  (isStandaloneRow || nameMatch.Room === row.Room) &&
-                  nameMatch.Name.toLowerCase() === row.Name.toLowerCase()
-              );
+        const occupants = (storeRoom?.students || []).filter((s) => s.id != null);
+        if (!occupants.length) return;
 
-              const rowMatchesRoom = isStandaloneRow
-                ? rowBuildingLower === matchedRoom.building.toLowerCase() &&
-                  rowSuiteStr === (matchedRoom as any).roomNumber?.toString()
-                : rowBuildingLower === matchedRoom.building.toLowerCase() &&
-                  parseInt(rowSuiteStr, 10) === matchedRoom.suiteNumber &&
-                  row.Room === matchedRoom.letter;
-
-              if (rowMatchesRoom && !isNameMatch) {
-                return index;
-              }
-              return undefined;
-            })
-            .filter((index) => index !== undefined);
-  
-          if (existingRoomKey && matchedRoom.students.length === 2) {
-            const existingSelection = initialSelections[existingRoomKey];
-            const otherStudent = matchedRoom.students.find(
-              (student) => student.id !== existingSelection
-            );
-            if (otherStudent && existingRoomKey) {
-              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[1]}`] =
-                otherStudent.id;
-            }
+        indexes.forEach((rowIndex, slot) => {
+          if (occupants.length === 1) {
+            initialSelections[`${roomKey}-${rowIndex}`] = slot === 0 ? "-1" : occupants[0].id;
           } else {
-            if (matchedRoom.students.length === 1 && !existingRoomKey) {
-              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] = "-1";
-            } else {
-              initialSelections[`${roomKey}-${stdIndexes && stdIndexes[0]}`] =
-                matchedRoom.students[0].id;
-            }
+            initialSelections[`${roomKey}-${rowIndex}`] =
+              occupants[Math.min(slot, occupants.length - 1)].id;
           }
-        }
-      }
-    });
-    setStudentSelections(initialSelections);  
-    setExpandedRows(initialExpandedRows);
-  
-    return roomMatches.length > 0;
+        });
+      });
+
+      setStudentSelections(initialSelections);
+      studentSelectionsRef.current = initialSelections;
+      setExpandedRows(initialExpandedRows);
+      selectionsForValidation = initialSelections;
+    }
+
+    setRowErrors(validateRows(data, nameMatches, selectionsForValidation));
   };
   
 
@@ -394,47 +523,64 @@ function DataImport() {
 
   const importData = useCallback(async () => {
     const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
-    if (selectedPreview) {
-      // Create a filtered version of the preview that excludes name matches
-      const filteredPreview = {
-        ...selectedPreview,
-        allRows: selectedPreview.allRows.filter((row) => {
-          // Skip rows with matching names
-          if (row.Name) {
-            const isNameMatching = matchingNames.some(
-              (student) =>
-              student.Name && student.Name.toLowerCase() === row.Name.toLowerCase()
-                
-            );
-            if (isNameMatching) {
-              return false;
-            }
-          }
-          return true;
-        }),
-      };
+    if (!selectedPreview) return;
 
-      // Pass the filtered preview to importStudents along with student selections
-      await importStudents(filteredPreview.allRows, studentSelections);
+    const errors = validateRows(selectedPreview.allRows, matchingNames, studentSelections);
+    setRowErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error(t.import.fixBeforeImport);
+      return;
+    }
+
+    const filteredRows = selectedPreview.allRows.filter(
+      (row) => !isYellowNameMatch(row, matchingNames)
+    );
+
+    if (filteredRows.length === 0) {
+      toast.error(t.import.noRowsToImport);
+      return;
+    }
+
+    try {
+      await importStudents(filteredRows, studentSelections);
       setPreviewData([]);
       setSelectedSheet("");
       setShowConfirmModal(false);
       setStudentSelections({});
       setExpandedRows({});
+      setRowErrors({});
       toast.success(t.import.success);
+    } catch {
+      // Error toast already shown by the store; keep preview so the user can fix and retry.
     }
   }, [
     previewData,
     selectedSheet,
     importStudents,
     t.import.success,
-    rooms,
+    t.import.fixBeforeImport,
+    t.import.noRowsToImport,
     studentSelections,
+    matchingNames,
+    validateRows,
+    isYellowNameMatch,
   ]);
 
   const handleCancelButton = useCallback(() => {
     setShowConfirmModal(false);
   }, []);
+
+  const getStudentsForRoom = useCallback(
+    (building: string, suiteOrRoomNumber: string, roomLetter: string) => {
+      const matchedRoom = findStoreRoom(
+        building.trim().toLowerCase(),
+        normalizeSuite(suiteOrRoomNumber),
+        normalizeLetter(roomLetter)
+      );
+      return matchedRoom?.students.filter((student) => student.id !== null) || [];
+    },
+    [findStoreRoom]
+  );
 
   const handleStudentSelection = useCallback(
     (roomKey: string, studentId: string, rowIndex: number) => {
@@ -464,29 +610,26 @@ function DataImport() {
             newSelections[key] = otherStudentId;
           }
         });
-      } else {
+      } else if (exitingKeyRoom[0]) {
         newSelections[exitingKeyRoom[0]] = studentId;
+      } else {
+        newSelections[`${roomKey}-${rowIndex}`] = studentId;
       }
       setStudentSelections(newSelections);
-    },
-    [expandedRows, studentSelections] 
-  );
 
-  const getStudentsForRoom = useCallback(
-    (building: string, suiteOrRoomNumber: string, roomLetter: string) => {
-      const buildingLower = building.trim().toLowerCase();
-      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
-      const isStandalone = layoutType === 'standalone';
-      const matchedRoom = rooms.find((r) =>
-        isStandalone
-          ? (r as any).roomNumber?.toString() === suiteOrRoomNumber && r.building === buildingLower
-          : r.suiteNumber === parseInt(suiteOrRoomNumber, 10) &&
-            (r.letter || '').trim() === roomLetter &&
-            r.building === buildingLower
-      );
-      return matchedRoom?.students.filter((student) => student.id !== null) || [];
+      const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
+      if (selectedPreview) {
+        setRowErrors(validateRows(selectedPreview.allRows, matchingNames, newSelections));
+      }
     },
-    [rooms, buildings]
+    [
+      studentSelections,
+      getStudentsForRoom,
+      previewData,
+      selectedSheet,
+      matchingNames,
+      validateRows,
+    ]
   );
 
   const handleCancel = useCallback(() => {
@@ -494,7 +637,63 @@ function DataImport() {
     setSelectedSheet("");
     setStudentSelections({});
     setExpandedRows({});
+    setRowErrors({});
   }, []);
+
+  const applyPreviewRows = useCallback(
+    (nextAllRows: any[]) => {
+      if (nextAllRows.length === 0) {
+        setPreviewData([]);
+        setSelectedSheet("");
+        setStudentSelections({});
+        setExpandedRows({});
+        setRowErrors({});
+        toast.success(t.import.allErrorRowsRemoved);
+        return;
+      }
+
+      setPreviewData((prev) =>
+        prev.map((sheet) => {
+          if (sheet.sheet !== selectedSheet) return sheet;
+          const rowsPerPage = sheet.rowsPerPage || 10;
+          const visibleCount = Math.max(sheet.rows.length, rowsPerPage);
+          return {
+            ...sheet,
+            allRows: nextAllRows,
+            rows: nextAllRows.slice(0, Math.min(visibleCount, nextAllRows.length)),
+            currentPage: Math.max(1, Math.ceil(Math.min(visibleCount, nextAllRows.length) / rowsPerPage)),
+          };
+        })
+      );
+      setStudentSelections({});
+      setExpandedRows({});
+    },
+    [selectedSheet, t.import.allErrorRowsRemoved]
+  );
+
+  const removePreviewRow = useCallback(
+    (rowIndex: number) => {
+      const selected = previewData.find((p) => p.sheet === selectedSheet);
+      if (!selected) return;
+      const nextAllRows = selected.allRows.filter((_, index) => index !== rowIndex);
+      applyPreviewRows(nextAllRows);
+    },
+    [previewData, selectedSheet, applyPreviewRows]
+  );
+
+  const removeAllErrorRows = useCallback(() => {
+    const selected = previewData.find((p) => p.sheet === selectedSheet);
+    if (!selected) return;
+    const errorIndexes = new Set(Object.keys(rowErrors).map((key) => Number(key)));
+    if (errorIndexes.size === 0) return;
+    const nextAllRows = selected.allRows.filter((_, index) => !errorIndexes.has(index));
+    applyPreviewRows(nextAllRows);
+    if (nextAllRows.length > 0) {
+      toast.success(
+        t.import.errorRowsRemoved.replace("{count}", String(errorIndexes.size))
+      );
+    }
+  }, [previewData, selectedSheet, rowErrors, applyPreviewRows, t.import.errorRowsRemoved]);
 
   const getTemplateExcel = useCallback(async () => {
     try {
@@ -549,35 +748,20 @@ function DataImport() {
         
         // Create sample data for the Students sheet
         const sampleData = [
-          {
-            Name: "John Doe",
-            Building: "Edwards",
-            Suite: 101,
-            Room: "A"
-          },
-          {
-            Name: "Jane Smith",
-            Building: "Holland",
-            Suite: 202,
-            Room: "B"
-          },
-          {
-            Name: "Alex Johnson",
-            Building: "Peterson",
-            Suite: 303,
-            Room: "C"
-          }
+          { Name: "John", Lastname: "Doe", ID: "10001", Building: "Edwards", Suite: 101, Room: "A" },
+          { Name: "Jane", Lastname: "Smith", ID: "10002", Building: "Wade", Suite: 202, Room: "B" },
+          { Name: "Alex", Lastname: "Johnson", ID: "10003", Building: "Holland", Suite: 303, Room: "C" },
+          { Name: "Sam", Lastname: "Lee", ID: "10004", Building: "Peterson", Suite: "", Room: "101" },
         ];
-        
-        // Convert the data to a worksheet
+
         const worksheet = utils.json_to_sheet(sampleData);
-        
-        // Add column widths for better readability
         const columnWidths = [
-          { wch: 20 }, // Name
-          { wch: 15 }, // Building
+          { wch: 14 }, // Name
+          { wch: 14 }, // Lastname
+          { wch: 12 }, // ID
+          { wch: 14 }, // Building
           { wch: 10 }, // Suite
-          { wch: 10 }  // Room
+          { wch: 10 }, // Room
         ];
         
         worksheet['!cols'] = columnWidths;
@@ -631,10 +815,11 @@ function DataImport() {
                   <h3 className="font-medium text-slate-700 text-sm">{t.import.instructions.sheets}:</h3>
                   <ul className="list-disc pl-5 space-y-1.5 text-slate-500 text-sm">
                     <li>{t.import.instructions.name}</li>
+                    <li>{t.import.instructions.lastname}</li>
                     <li>{t.import.instructions.id}</li>
-                    <li>{t.import.instructions.room}</li>
-                    <li>{t.import.instructions.suite}</li>
                     <li>{t.import.instructions.building}</li>
+                    <li>{t.import.instructions.suite}</li>
+                    <li>{t.import.instructions.room}</li>
                   </ul>
                 </div>
               </div>
@@ -732,7 +917,13 @@ function DataImport() {
                   </button>
                   <button
                     onClick={handleSave}
-                    className="btn-primary btn-md text-sm"
+                    disabled={Object.keys(rowErrors).length > 0}
+                    className="btn-primary btn-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={
+                      Object.keys(rowErrors).length > 0
+                        ? t.import.fixBeforeImport
+                        : undefined
+                    }
                   >
                     {t.import.importButton}
                   </button>
@@ -743,17 +934,34 @@ function DataImport() {
   
           {selectedPreview && (
             <>
-              <div className="p-4 bg-slate-50 border-b border-slate-100">
-                <div className="flex flex-col space-y-2">
-                  <p className="text-sm text-slate-600 flex items-center">
-                    <span className="inline-block w-3.5 h-3.5 rounded bg-red-300 mr-2"></span>
-                    {t.import.dataPreview.legend.redLabel}
-                  </p>
-                  <p className="text-sm text-slate-600 flex items-center">
-                    <span className="inline-block w-3.5 h-3.5 rounded bg-yellow-200 mr-2"></span>
-                    {t.import.dataPreview.legend.yellowLabel}
-                  </p>
-                </div>
+              <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-2">
+                {Object.keys(rowErrors).length > 0 && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span>
+                      {t.import.errorsFound.replace("{count}", String(Object.keys(rowErrors).length))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeAllErrorRows}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-red-200 text-red-700 hover:bg-red-100 text-xs font-medium shrink-0"
+                    >
+                      <Trash2 size={14} />
+                      {t.import.removeAllErrorRows}
+                    </button>
+                  </div>
+                )}
+                <p className="text-sm text-slate-600 flex items-center">
+                  <span className="inline-block w-3.5 h-3.5 rounded bg-red-300 mr-2"></span>
+                  {t.import.dataPreview.legend.redLabel}
+                </p>
+                <p className="text-sm text-slate-600 flex items-center">
+                  <span className="inline-block w-3.5 h-3.5 rounded bg-yellow-200 mr-2"></span>
+                  {t.import.dataPreview.legend.yellowLabel}
+                </p>
+                <p className="text-sm text-slate-600 flex items-center">
+                  <span className="inline-block w-3.5 h-3.5 rounded bg-orange-200 mr-2"></span>
+                  {t.import.dataPreview.legend.errorLabel}
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -775,67 +983,94 @@ function DataImport() {
                   <tbody className="bg-white divide-y divide-slate-100">
                     {selectedPreview.rows.map((row, rowIndex) => {
                       const buildingLower = row.Building ? row.Building.toString().toLowerCase() : "";
-                      const layoutType = buildings.find((b) => b.name === buildingLower)?.layout_type ?? 'suite';
-                      const isStandalone = layoutType === 'standalone';
-                      const suiteOrRoomStr = row.Suite ? row.Suite.toString().trim() : "";
+                      const layoutType = getBuildingLayout(buildingLower) ?? "suite";
+                      const isStandalone = layoutType === "standalone";
+                      const suiteOrRoomStr = isStandalone
+                        ? standaloneRoomNumber(row)
+                        : normalizeSuite(row.Suite);
+                      const roomLetter = isStandalone ? "" : normalizeLetter(row.Room);
+                      const rowError = rowErrors[rowIndex];
 
-                      const isRoomMatching = matchingStudents.some(
-                        (match) =>
-                          match.Suite?.toString().trim() === suiteOrRoomStr &&
-                          (isStandalone || match.Room === row.Room) &&
-                          match.Building.toLowerCase() === buildingLower 
-                      );
-  
-                      const isNameMatching = matchingNames.some(
-                        (match) =>
-                          match.Name &&
-                          row.Name &&
-                          match.Name.toLowerCase() === row.Name.toLowerCase()
-                      );
-  
+                      const isRoomMatching = matchingStudents.some((match) => {
+                        const matchStandalone =
+                          getBuildingLayout(String(match.Building || "")) === "standalone";
+                        const matchSuiteOrRoom = matchStandalone
+                          ? standaloneRoomNumber(match)
+                          : normalizeSuite(match.Suite);
+                        return (
+                          matchSuiteOrRoom === suiteOrRoomStr &&
+                          (isStandalone || normalizeLetter(match.Room) === roomLetter) &&
+                          String(match.Building || "").toLowerCase() === buildingLower
+                        );
+                      });
+
+                      const isNameMatching = isYellowNameMatch(row, matchingNames);
+
                       let rowClass = rowIndex % 2 === 0 ? "bg-slate-50" : "bg-white";
-                      if (isNameMatching) {
+                      if (rowError) {
+                        rowClass = "bg-orange-100";
+                      } else if (isNameMatching) {
                         rowClass = "bg-yellow-200";
                       } else if (isRoomMatching) {
                         rowClass = "bg-red-300";
                       }
-  
-                      // roomKey must match backend convention
-                      const roomKey = isStandalone
-                        ? `${buildingLower}-${suiteOrRoomStr}-`
-                        : `${buildingLower}-${suiteOrRoomStr}-${row.Room}`;
-                      
+
+                      const roomKey = roomKeyForRow(row);
+
                       const studentsInRoom =
-                        isRoomMatching && !isNameMatching
-                          ? getStudentsForRoom(buildingLower, suiteOrRoomStr, row.Room ?? "")
+                        isRoomMatching && !isNameMatching && !rowError
+                          ? getStudentsForRoom(buildingLower, suiteOrRoomStr, roomLetter)
                           : [];
                       return (
                         <>
-                          <tr key={rowIndex} className={rowClass}>
+                          <tr key={rowIndex} className={rowClass} title={rowError || undefined}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                              {isRoomMatching && studentsInRoom.length > 0 && (
-                                <button
-                                  onClick={() => toggleExpandedRow(roomKey)}
-                                  className="flex items-center justify-center gap-0.5 p-1.5 bg-brand-100 rounded-full hover:bg-brand-200 transition-colors"
-                                  title="Current students in this room"
-                                >
-                                  <UserIcon size={16} className="text-brand-600" />
-                                  {expandedRows[roomKey] ? (
-                                    <ChevronUp size={16} className="text-brand-600 transition-transform" />
-                                  ) : (
-                                    <ChevronDown size={16} className="text-brand-600 transition-transform" />
-                                  )}
-                                </button>
+                              {rowError ? (
+                                <div className="flex items-center gap-2 max-w-[18rem]">
+                                  <span className="inline-flex items-center gap-1 text-orange-700 text-xs font-medium min-w-0">
+                                    <AlertCircle size={14} className="shrink-0" />
+                                    <span className="truncate">{rowError}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePreviewRow(rowIndex)}
+                                    className="shrink-0 inline-flex items-center justify-center p-1.5 rounded-lg text-orange-700 hover:bg-orange-200/80 transition-colors"
+                                    title={t.import.removeErrorRow}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                isRoomMatching && studentsInRoom.length > 0 && (
+                                  <button
+                                    onClick={() => toggleExpandedRow(roomKey)}
+                                    className="flex items-center justify-center gap-0.5 p-1.5 bg-brand-100 rounded-full hover:bg-brand-200 transition-colors"
+                                    title="Current students in this room"
+                                  >
+                                    <UserIcon size={16} className="text-brand-600" />
+                                    {expandedRows[roomKey] ? (
+                                      <ChevronUp size={16} className="text-brand-600 transition-transform" />
+                                    ) : (
+                                      <ChevronDown size={16} className="text-brand-600 transition-transform" />
+                                    )}
+                                  </button>
+                                )
                               )}
                             </td>
-                            {selectedPreview.headers.map((header, colIndex) => (
-                              <td
-                                key={`${rowIndex}-${colIndex}`}
-                                className="px-6 py-4 whitespace-nowrap text-sm text-slate-900"
-                              >
-                                {row[header]?.toString() || ""}
-                              </td>
-                            ))}
+                            {selectedPreview.headers.map((header, colIndex) => {
+                              let displayValue = row[header]?.toString() || "";
+                              if (header === "Suite" && isStandalone) {
+                                displayValue = "-";
+                              }
+                              return (
+                                <td
+                                  key={`${rowIndex}-${colIndex}`}
+                                  className="px-6 py-4 whitespace-nowrap text-sm text-slate-900"
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
                           </tr>
                           {expandedRows[roomKey] && isRoomMatching && !isNameMatching && studentsInRoom.length > 0 && (
                             <tr className="bg-brand-50/60">
@@ -864,7 +1099,8 @@ function DataImport() {
                                         >
                                           <UserIcon size={16} className="text-slate-500" />
                                           <span>
-                                            {student.name}{student.studentUid ? ` · ${student.studentUid}` : ""}
+                                            {[student.name, student.lastname].filter(Boolean).join(" ")}
+                                            {student.studentUid ? ` · ${student.studentUid}` : ""}
                                           </span>
                                           {studentSelections[`${roomKey}-${rowIndex}`] === student.id && (
                                             <span className="badge bg-brand-100 text-brand-800">

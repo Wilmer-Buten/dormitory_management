@@ -3,13 +3,44 @@ import { motion } from "framer-motion"
 import { Toaster } from "react-hot-toast"
 import { useQuery } from "@tanstack/react-query"
 import {
-  Building2, DoorOpen, Users, UserCheck, ArrowRight, ArrowUpRight,
-  UserPlus, FileSpreadsheet, Wrench, ClipboardCheck, Clock, Loader2,
+  Building2, DoorOpen, Users, UserCheck, ArrowRight,
+  UserPlus, FileSpreadsheet, Wrench, ClipboardCheck, Loader2,
 } from "lucide-react"
 import { useStore } from "../store/useStore"
 import { DateSelector } from "./DateSelector"
+import {
+  BuildingBlueprint,
+  floorFromNumber,
+  type AttendanceStatus,
+  type BlueprintRoom,
+  type BlueprintSuite,
+} from "./BuildingBlueprint"
 
 const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+
+function studentAttendanceStatus(s: {
+  id: string | null
+  isPresent: boolean | null | 1 | 0
+  inRoom: boolean | null | 1 | 0
+}): AttendanceStatus | null {
+  if (s.id === null) return null
+  if (s.isPresent === true || s.isPresent === 1) return "present"
+  if (s.inRoom === true || s.inRoom === 1) return "in_room"
+  if (
+    (s.isPresent === false || s.isPresent === 0) &&
+    (s.inRoom === false || s.inRoom === 0 || s.inRoom === null || s.inRoom === undefined)
+  ) {
+    return "absent"
+  }
+  return "pending"
+}
+
+function rollupRoomStatus(statuses: AttendanceStatus[]): AttendanceStatus {
+  if (!statuses.length) return "empty"
+  const unique = [...new Set(statuses)]
+  if (unique.length > 1) return "mixed"
+  return unique[0]
+}
 
 function Dashboard() {
   const {
@@ -19,7 +50,6 @@ function Dashboard() {
     currentUser,
     selectedDate,
     accessToken,
-    enableFetchRoomsQuery,
     enableFetchUsersQuery,
     setEnableFetchRoomsQuery,
     fetchRooms,
@@ -60,6 +90,7 @@ function Dashboard() {
     () => (isScoped ? buildings.filter((b) => b.id === currentUser?.building_id) : buildings),
     [buildings, isScoped, currentUser?.building_id]
   )
+  const scopedBuilding = visibleBuildings[0]
 
   const buildingStats = useMemo(() => {
     type Entry = { building: { name: string; code: string }; totalRooms: number; totalStudents: number; present: number; absent: number; inRoom: number; pending: number }
@@ -101,23 +132,72 @@ function Dashboard() {
 
   const attendanceRate = totals.totalStudents > 0 ? Math.round((totals.present / totals.totalStudents) * 100) : 0
 
-  const recentActivity = useMemo(() => {
-    const items: { name: string; building: string; room: string; checkedBy: string; time: string }[] = []
-    rooms.forEach((room) => {
-      room.students.forEach((s) => {
-        if (s.id !== null && s.lastCheckedAt) {
-          items.push({
-            name: s.name,
-            building: capitalize(room.building),
-            room: `${room.suiteNumber ?? ""}${room.letter ?? ""}`,
-            checkedBy: s.lastCheckedBy || "—",
-            time: s.lastCheckedAt,
+  /** Map overview rooms → blueprint data for the supervisor building graphic */
+  const dashboardBlueprint = useMemo(() => {
+    if (!isScoped || !scopedBuilding) {
+      return { suites: [] as BlueprintSuite[], rooms: [] as BlueprintRoom[], floors: 1 }
+    }
+
+    const layout = scopedBuilding.layout_type
+    const blueprintRooms: BlueprintRoom[] = []
+    const suiteMap = new Map<number, BlueprintSuite>()
+
+    for (const room of rooms) {
+      const statuses = room.students
+        .map((s) => studentAttendanceStatus(s))
+        .filter((s): s is AttendanceStatus => s != null)
+      const activeStudents = room.students.filter((s) => s.id !== null)
+      const roomNumber = (room as { roomNumber?: number | string | null }).roomNumber ?? null
+      const suiteIdNum = room.suiteId != null && room.suiteId !== "" ? Number(room.suiteId) : NaN
+      const hasSuite = Number.isFinite(suiteIdNum)
+
+      const isCleanCheckDay = room.isCleanCheckDay === true || room.isCleanCheckDay === 1
+      const cleanStatus = !isCleanCheckDay
+        ? null
+        : room.isClean === true || room.isClean === 1
+          ? "clean"
+          : room.isClean === false || room.isClean === 0
+            ? "dirty"
+            : "unchecked"
+
+      blueprintRooms.push({
+        id: Number(room.id),
+        suite_id: hasSuite ? suiteIdNum : null,
+        suite_number: room.suiteNumber ?? null,
+        letter: room.letter ?? null,
+        number: roomNumber ?? (layout !== "suite" ? room.suiteNumber : null),
+        student_count: activeStudents.length,
+        attendanceStatus: rollupRoomStatus(statuses),
+        attendanceStatuses: statuses,
+        isCleanCheckDay,
+        cleanStatus,
+      })
+
+      if (layout === "suite" && hasSuite) {
+        const existing = suiteMap.get(suiteIdNum)
+        if (existing) {
+          existing.room_count += 1
+        } else {
+          suiteMap.set(suiteIdNum, {
+            id: suiteIdNum,
+            number: room.suiteNumber,
+            room_count: 1,
           })
         }
-      })
-    })
-    return items.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 6)
-  }, [rooms])
+      }
+    }
+
+    const suites = Array.from(suiteMap.values())
+    const floors = Math.max(
+      scopedBuilding.floors || 1,
+      ...(layout === "suite"
+        ? suites.map((s) => floorFromNumber(s.number))
+        : blueprintRooms.map((r) => floorFromNumber(r.number ?? r.suite_number))),
+      1
+    )
+
+    return { suites, rooms: blueprintRooms, floors }
+  }, [isScoped, scopedBuilding, rooms])
 
   const donutSegments = [
     { key: "present", value: totals.present, color: "#22c55e" },
@@ -134,6 +214,11 @@ function Dashboard() {
     return `${seg.color} ${start}% ${end}%`
   })
   const donutStyle = { background: `conic-gradient(${gradientParts.join(", ")})` }
+
+  const goToAttendance = () => {
+    if (scopedBuilding) setSelectedBuilding(scopedBuilding.name)
+    setCurrentSection("attendance")
+  }
 
   const quickActions = isScoped
     ? [
@@ -177,77 +262,65 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {isScoped ? (
           <>
-            {/* For supervisors: Today's Breakdown on left (large) */}
-            <div className="lg:col-span-2 card p-5 sm:p-6 flex flex-col">
-              <h2 className="font-semibold text-slate-800 mb-6">{t.dashboard.todaysBreakdown}</h2>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-16 flex-1 py-4">
-                <div className="relative w-40 h-40 shrink-0 rounded-full shadow-inner" style={donutStyle}>
-                  <div className="absolute inset-[14px] rounded-full bg-white flex items-center justify-center flex-col shadow-sm">
-                    <span className="text-3xl font-bold text-slate-800 leading-none">{attendanceRate}%</span>
-                    <span className="text-sm text-slate-400 mt-1">present</span>
-                  </div>
+            {/* Supervisor: building graphic (large) */}
+            <div className="lg:col-span-2 card p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="font-semibold text-slate-800 capitalize">
+                    {scopedBuilding?.name ?? "Building"}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {scopedBuilding?.code ? `${scopedBuilding.code} · ` : ""}
+                    Click a unit to open attendance
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-x-12 gap-y-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></div>
-                    <div>
-                      <p className="text-3xl font-bold text-slate-900 leading-none">{totals.present}</p>
-                      <p className="text-sm text-slate-500 mt-1">{t.present}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full bg-yellow-500 shadow-sm"></div>
-                    <div>
-                      <p className="text-3xl font-bold text-slate-900 leading-none">{totals.inRoom}</p>
-                      <p className="text-sm text-slate-500 mt-1">In room</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></div>
-                    <div>
-                      <p className="text-3xl font-bold text-slate-900 leading-none">{totals.absent}</p>
-                      <p className="text-sm text-slate-500 mt-1">{t.absent}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full bg-slate-300 shadow-sm"></div>
-                    <div>
-                      <p className="text-3xl font-bold text-slate-900 leading-none">{totals.pending}</p>
-                      <p className="text-sm text-slate-500 mt-1">{t.pending}</p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={goToAttendance}
+                  className="text-xs font-medium text-oakwood-blue hover:text-oakwood-blue-dark inline-flex items-center gap-1"
+                >
+                  Attendance <ArrowRight size={13} />
+                </button>
               </div>
+
+              {isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-7 h-7 animate-spin text-oakwood-blue" />
+                </div>
+              ) : !scopedBuilding ? (
+                <p className="text-sm text-slate-400 py-10 text-center">No building assigned</p>
+              ) : (
+                <BuildingBlueprint
+                  layoutType={scopedBuilding.layout_type}
+                  floors={dashboardBlueprint.floors}
+                  suites={dashboardBlueprint.suites}
+                  rooms={dashboardBlueprint.rooms}
+                  readOnly
+                  attendanceMode
+                  onSelectSuite={goToAttendance}
+                  onSelectRoom={goToAttendance}
+                />
+              )}
             </div>
 
-            {/* For supervisors: Building info + Quick Actions on right (small) */}
+            {/* Supervisor: compact breakdown + quick actions */}
             <div className="space-y-5">
               <div className="card p-5 sm:p-6">
-                <h2 className="font-semibold text-slate-800 mb-4">{capitalize(visibleBuildings[0]?.name ?? "")}</h2>
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-oakwood-blue" />
-                  </div>
-                ) : buildingStats.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Total Students</span>
-                      <span className="font-semibold text-slate-900">{buildingStats[0].totalStudents}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Total Rooms</span>
-                      <span className="font-semibold text-slate-900">{buildingStats[0].totalRooms}</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden flex mt-3">
-                      {buildingStats[0].present > 0 && <div className="h-full bg-green-500" style={{ width: `${(buildingStats[0].present / (buildingStats[0].present + buildingStats[0].absent + buildingStats[0].inRoom + buildingStats[0].pending || 1)) * 100}%` }} />}
-                      {buildingStats[0].inRoom > 0 && <div className="h-full bg-yellow-500" style={{ width: `${(buildingStats[0].inRoom / (buildingStats[0].present + buildingStats[0].absent + buildingStats[0].inRoom + buildingStats[0].pending || 1)) * 100}%` }} />}
-                      {buildingStats[0].absent > 0 && <div className="h-full bg-red-500" style={{ width: `${(buildingStats[0].absent / (buildingStats[0].present + buildingStats[0].absent + buildingStats[0].inRoom + buildingStats[0].pending || 1)) * 100}%` }} />}
-                      {buildingStats[0].pending > 0 && <div className="h-full bg-slate-300" style={{ width: `${(buildingStats[0].pending / (buildingStats[0].present + buildingStats[0].absent + buildingStats[0].inRoom + buildingStats[0].pending || 1)) * 100}%` }} />}
+                <h2 className="font-semibold text-slate-800 mb-5">{t.dashboard.todaysBreakdown}</h2>
+                <div className="flex items-center gap-5">
+                  <div className="relative w-24 h-24 shrink-0 rounded-full" style={donutStyle}>
+                    <div className="absolute inset-[9px] rounded-full bg-white flex items-center justify-center flex-col">
+                      <span className="text-lg font-bold text-slate-800 leading-none">{attendanceRate}%</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">present</span>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-slate-400 py-4 text-center">No data</p>
-                )}
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <LegendRow color="bg-green-500" label={t.present} value={totals.present} />
+                    <LegendRow color="bg-yellow-500" label={t.inRoom} value={totals.inRoom} />
+                    <LegendRow color="bg-red-500" label={t.absent} value={totals.absent} />
+                    <LegendRow color="bg-slate-300" label={t.pending} value={totals.pending} />
+                  </div>
+                </div>
               </div>
 
               <div className="card p-5 sm:p-6">
@@ -329,7 +402,7 @@ function Dashboard() {
                   </div>
                   <div className="space-y-1.5 flex-1 min-w-0">
                     <LegendRow color="bg-green-500" label={t.present} value={totals.present} />
-                    <LegendRow color="bg-yellow-500" label="In room" value={totals.inRoom} />
+                    <LegendRow color="bg-yellow-500" label={t.inRoom} value={totals.inRoom} />
                     <LegendRow color="bg-red-500" label={t.absent} value={totals.absent} />
                     <LegendRow color="bg-slate-300" label={t.pending} value={totals.pending} />
                   </div>

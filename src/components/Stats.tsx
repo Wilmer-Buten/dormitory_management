@@ -78,7 +78,7 @@ export const Stats: React.FC = React.memo(() => {
         isLoading={isLoadingRooms}
       />
       <MemoizedStatCard
-        title="In room"
+        title={t.inRoom}
         value={stats.inRoomCount}
         icon={Eye}
         type="inRoom"

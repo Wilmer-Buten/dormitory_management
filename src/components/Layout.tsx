@@ -56,7 +56,16 @@ export function Layout({ children }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
-  const { getTranslation, currentSection, setCurrentSection, currentUser, usersRoleFilter, setUsersRoleFilter } = useStore()
+  const {
+    getTranslation,
+    currentSection,
+    setCurrentSection,
+    currentUser,
+    usersRoleFilter,
+    setUsersRoleFilter,
+    reportsTabFilter,
+    setReportsTabFilter,
+  } = useStore()
   const t = getTranslation()
 
   // Close mobile menu when switching to desktop view
@@ -99,6 +108,12 @@ export function Layout({ children }: LayoutProps) {
           { label: t.menu.cleanCheck, value: "cleanCheck", icon: Sparkles },
         ]
 
+  const reportsSubItems: SubMenuItem[] = [
+    { label: t.reports.tabAll, value: "all" },
+    { label: t.reports.tabAttendance, value: "attendance", icon: ClipboardCheck },
+    { label: t.reports.tabCleanCheck, value: "cleanCheck", icon: Sparkles },
+  ]
+
   const menuItems: NavMenuItem[] =
     currentUser?.role === "staff"
       ? [
@@ -110,7 +125,7 @@ export function Layout({ children }: LayoutProps) {
           { icon: LayoutDashboard, label: t.menu.dashboard, path: "dashboard" },
           { icon: ClipboardCheck, label: t.menu.attendance, path: "attendance" },
           { icon: User, label: "Residents", path: "students" },
-          { icon: FileText, label: t.menu.reports, path: "reports" },
+          { icon: FileText, label: t.menu.reports, path: "reports", subMode: "filter", subItems: reportsSubItems },
           { icon: Users, label: t.menu.users, path: "users", subMode: "filter", subItems: usersSubItems },
           { icon: Wrench, label: t.menu.setup, path: "setup-group", subMode: "nav", subItems: setupSubItems },
           { icon: Settings, label: t.menu.settings, path: "settings" },
@@ -119,7 +134,7 @@ export function Layout({ children }: LayoutProps) {
           { icon: LayoutDashboard, label: t.menu.dashboard, path: "dashboard" },
           { icon: ClipboardCheck, label: t.menu.attendance, path: "attendance" },
           { icon: User, label: "Residents", path: "students" },
-          { icon: FileText, label: t.menu.reports, path: "reports" },
+          { icon: FileText, label: t.menu.reports, path: "reports", subMode: "filter", subItems: reportsSubItems },
           { icon: Users, label: t.menu.users, path: "users", subMode: "filter", subItems: usersSubItems },
           { icon: Wrench, label: t.menu.setup, path: "setup-group", subMode: "nav", subItems: setupSubItems },
           { icon: Settings, label: t.menu.settings, path: "settings" },
@@ -134,8 +149,11 @@ export function Layout({ children }: LayoutProps) {
     return currentSection === item.path
   }
 
-  const isSubItemActive = (item: NavMenuItem, sub: SubMenuItem) =>
-    item.subMode === "nav" ? currentSection === sub.value : usersRoleFilter === sub.value
+  const isSubItemActive = (item: NavMenuItem, sub: SubMenuItem) => {
+    if (item.subMode === "nav") return currentSection === sub.value
+    if (item.path === "reports") return reportsTabFilter === sub.value
+    return usersRoleFilter === sub.value
+  }
 
   const handleItemClick = (item: NavMenuItem, closeMobile: boolean) => {
     if (item.subMode === "nav") {
@@ -155,6 +173,9 @@ export function Layout({ children }: LayoutProps) {
   const handleSubItemClick = (item: NavMenuItem, sub: SubMenuItem, closeMobile: boolean) => {
     if (item.subMode === "nav") {
       setCurrentSection(sub.value as Section)
+    } else if (item.path === "reports") {
+      setCurrentSection("reports")
+      setReportsTabFilter(sub.value as "all" | "attendance" | "cleanCheck")
     } else {
       setUsersRoleFilter(sub.value as UsersRoleFilter)
     }
@@ -335,10 +356,13 @@ export function Layout({ children }: LayoutProps) {
                   <button
                     key={item.path}
                     onClick={() => {
-                      // If item has subitems, open sidebar and expand menu
-                      if (item.subItems && item.subItems.length > 0) {
+                      // Nav groups: expand sidebar to pick a child. Filter groups: go to section + expand.
+                      if (item.subMode === "nav" && item.subItems && item.subItems.length > 0) {
                         setIsDesktopSidebarOpen(true)
                         setExpandedGroups((prev) => ({ ...prev, [item.path]: true }))
+                      } else if (item.subItems && item.subItems.length > 0) {
+                        setCurrentSection(item.path as Section)
+                        setIsDesktopSidebarOpen(true)
                       } else {
                         setCurrentSection(collapsedRailTarget(item))
                       }

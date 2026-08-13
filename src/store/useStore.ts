@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Room, User, Suite, Building, Language, AttendanceReport, Weekday } from '../types';
+import { Room, User, Suite, Building, Language, AttendanceReport, CleanCheckReport, ReportsTabFilter, Weekday, floorFromRoom } from '../types';
 import { translations } from '../i18n/translations';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,7 @@ interface Store {
   viewMode: 'rooms' | 'suites';
   selectedSuite: string | null;
   selectedBuilding: string;
+  selectedFloor: number | 'all';
   language: Language;
   isLoading: boolean;
   accessToken: string;
@@ -24,11 +25,13 @@ interface Store {
   enableFetchUsersQuery: boolean;
   selectedStat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending';
   usersRoleFilter: 'all' | 'admin' | 'supervisor' | 'staff';
+  reportsTabFilter: ReportsTabFilter;
   isCleanCheckDay: boolean;
   err: string | null;
   theme: 'light' | 'dark';
   setSelectedStat: (stat: 'all' | 'present' | 'inRoom' | 'absent' | 'pending') => void;
   setUsersRoleFilter: (role: 'all' | 'admin' | 'supervisor' | 'staff') => void;
+  setReportsTabFilter: (tab: ReportsTabFilter) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   onPageChange: (page: number) => void
   setCurrentSection: (section: 'dashboard' | 'attendance' | 'users' | 'reports' | 'settings' | 'import' | 'setup' | 'students' | 'semesters' | 'cleanCheck') => void;
@@ -38,6 +41,7 @@ interface Store {
   setViewMode: (mode: 'rooms' | 'suites') => void;
   setSelectedSuite: (suiteId: string | null) => void;
   setSelectedBuilding: (building: string) => void;
+  setSelectedFloor: (floor: number | 'all') => void;
   setLanguage: (lang: Language) => void;
   updateStudentPresence: (roomId: string, studentId: string, isPresent: boolean | 1 | 0 | null, inRoom: boolean | null) => Promise<void>;
   updateRoomCleanliness: (roomId: string, isClean: boolean) => Promise<void>;
@@ -47,6 +51,7 @@ interface Store {
   fetchRooms: () => Promise<Room[] | undefined>;
   fetchBuildings: () => Promise<Building[]>;
   fetchAttendanceReport: (params: { startDate: string; endDate: string; buildingId?: number | null }) => Promise<AttendanceReport>;
+  fetchCleanCheckReport: (params: { startDate: string; endDate: string; buildingId?: number | null }) => Promise<CleanCheckReport>;
   getBuildingName: (id: number | null | undefined) => string;
   fetchUsers: () => Promise<void>;
   createUser: (user: User) => Promise<void>;
@@ -63,7 +68,7 @@ interface Store {
   getSuites: () => Suite[];
   getDefaultViewMode: () => 'rooms' | 'suites';
   canSelectSuiteView: () => boolean;
-  addStudent: (roomId: string, studentName: String, studentUid?: string) => Promise<void>;
+  addStudent: (roomId: string, studentName: string, studentLastname: string, studentUid?: string) => Promise<void>;
   getStats: () => {
     totalRooms: number;
     presentCount: number;
@@ -145,6 +150,7 @@ export const useStore = create<Store>((set, get) => ({
   viewMode: 'rooms',
   selectedSuite: null,
   selectedBuilding: 'all',
+  selectedFloor: 'all',
   language: 'en',
   isLoading: isAuthenticated,
   err: null,
@@ -156,9 +162,11 @@ export const useStore = create<Store>((set, get) => ({
   accessToken: '',
   selectedStat: 'all',
   usersRoleFilter: 'all',
+  reportsTabFilter: 'all',
   isCleanCheckDay: false,
   onPageChange: (page) => set({ currentPage: page }),
   setUsersRoleFilter: (role) => set({ usersRoleFilter: role }),
+  setReportsTabFilter: (tab) => set({ reportsTabFilter: tab }),
   setSelectedStat: (stat) => set({ selectedStat: stat, currentPage: 1, viewMode: stat !== 'all' ? 'rooms' : get().viewMode, selectedSuite: null, searchQuery: '' }),
   setEnableFetchRoomsQuery: (enable) => set({ enableFetchRoomsQuery: enable }),
   setEnableFetchUsersQuery: (enable) => set({ enableFetchUsersQuery: enable }),
@@ -182,14 +190,15 @@ export const useStore = create<Store>((set, get) => ({
   setSelectedBuilding: (building) => {
     const currentUserBuildingId = get().currentUser?.building_id;
     if (currentUserBuildingId === null || currentUserBuildingId === undefined) {
-      set({ selectedBuilding: building, currentPage: 1, selectedStat: 'all', searchQuery: '' })
+      set({ selectedBuilding: building, currentPage: 1, selectedStat: 'all', searchQuery: '', selectedFloor: 'all' })
       set({ viewMode: get().getDefaultViewMode() })
       void get().fetchCleanCheckStatus()
     } else {
       toast.error(get().getTranslation().forbidden);
     }
-  },  
-  
+  },
+  setSelectedFloor: (floor) => set({ selectedFloor: floor, currentPage: 1 }),
+
   fetchRooms: async () => {
     try {
       await get().fetchBuildings();
@@ -298,6 +307,17 @@ export const useStore = create<Store>((set, get) => ({
     return data as AttendanceReport;
   },
 
+  fetchCleanCheckReport: async ({ startDate, endDate, buildingId }) => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (get().currentUser?.role === 'admin') {
+      params.set('building_id', buildingId === null || buildingId === undefined ? 'null' : String(buildingId));
+    }
+    const response = await fetchWithAuth(`${API_URL}/reports/clean-check?${params.toString()}`, {}, get, set);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch clean check report');
+    return data as CleanCheckReport;
+  },
+
   getBuildingName: (id) => {
     if (id === null || id === undefined) return get().getTranslation().buildings.all;
     const building = get().buildings.find((b) => b.id === id);
@@ -385,23 +405,39 @@ export const useStore = create<Store>((set, get) => ({
   
   getFilteredRooms: () => {
     
-    const { rooms, selectedBuilding, searchQuery, selectedStat, selectedSuite } = get();
+    const { rooms, selectedBuilding, searchQuery, selectedStat, selectedSuite, selectedFloor } = get();
 
-    return rooms.filter((room) => {
+    const filtered = rooms.filter((room) => {
       // Suite filter
       if (selectedSuite && room.suiteId !== selectedSuite) return false;
       
       // Building filter
       if (selectedBuilding !== 'all' && room.building !== selectedBuilding) return false;
+
+      // Floor filter
+      if (selectedFloor !== 'all' && floorFromRoom(room) !== selectedFloor) return false;
+
       // Search filter
       if (searchQuery) {
         const searchLower = searchQuery.toLowerCase();
-        const matchesSearch = room.building.toLowerCase().includes(searchLower) ||
-          room.suiteNumber.toString().includes(searchLower) ||
-          room.students.some((student) => 
-            student.name?.toLowerCase().includes(searchLower) ||
-            student.studentUid?.toLowerCase().includes(searchLower)
-          );
+        const suiteStr = room.suiteNumber != null ? String(room.suiteNumber) : '';
+        const roomNumStr = room.roomNumber != null ? String(room.roomNumber) : '';
+        const letterStr = room.letter != null ? String(room.letter) : '';
+        const matchesSearch =
+          (room.building || '').toLowerCase().includes(searchLower) ||
+          suiteStr.toLowerCase().includes(searchLower) ||
+          roomNumStr.toLowerCase().includes(searchLower) ||
+          letterStr.toLowerCase().includes(searchLower) ||
+          `${suiteStr}${letterStr}`.toLowerCase().includes(searchLower) ||
+          room.students.some((student) => {
+            const fullName = [student.name, student.lastname].filter(Boolean).join(' ').toLowerCase();
+            return (
+              fullName.includes(searchLower) ||
+              student.name?.toLowerCase().includes(searchLower) ||
+              student.lastname?.toLowerCase().includes(searchLower) ||
+              student.studentUid?.toLowerCase().includes(searchLower)
+            );
+          });
         if (!matchesSearch) return false;
       }
       
@@ -421,6 +457,16 @@ export const useStore = create<Store>((set, get) => ({
       }
       
       return true;
+    });
+
+    return filtered.sort((a, b) => {
+      const fa = floorFromRoom(a);
+      const fb = floorFromRoom(b);
+      if (fa !== fb) return fa - fb;
+      const na = Number(a.roomNumber ?? a.suiteNumber ?? 0);
+      const nb = Number(b.roomNumber ?? b.suiteNumber ?? 0);
+      if (na !== nb) return na - nb;
+      return String(a.letter || '').localeCompare(String(b.letter || ''));
     });
   },
 
@@ -538,7 +584,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  addStudent: async (roomId: string, studentName: String, studentUid?: string) => {
+  addStudent: async (roomId: string, studentName: string, studentLastname: string, studentUid?: string) => {
     const currentUser = get().currentUser;
     if (!currentUser) return;
     // set({ isLoading: true });
@@ -549,6 +595,7 @@ export const useStore = create<Store>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: studentName,
+          lastname: studentLastname,
           roomId,
           studentUid: studentUid || null
         })
@@ -556,9 +603,14 @@ export const useStore = create<Store>((set, get) => ({
       const data = await response.json();
       if (!response.ok) {
         if (response.status === 409) {
-          toast.error('A student with this ID already exists', { id: 'add-student' });
+          const msg = String(data.message || '');
+          if (/full/i.test(msg) || data.error === 'Room is full') {
+            toast.error(get().getTranslation().roomIsFull, { id: 'add-student' });
+          } else {
+            toast.error('A student with this ID already exists', { id: 'add-student' });
+          }
         }
-        throw new Error('Failed to add student');
+        throw new Error(data.message || 'Failed to add student');
       }
 
       set((state) => ({
@@ -624,21 +676,25 @@ export const useStore = create<Store>((set, get) => ({
   getSuites: () => {
     const rooms = get().rooms;
     const selectedBuilding = get().selectedBuilding;
-    const filteredRooms = selectedBuilding === 'all' 
-      ? rooms 
-      : rooms.filter(room => room.building === selectedBuilding);
+    const selectedFloor = get().selectedFloor;
+    const filteredRooms = rooms.filter((room) => {
+      if (selectedBuilding !== 'all' && room.building !== selectedBuilding) return false;
+      if (selectedFloor !== 'all' && floorFromRoom(room) !== selectedFloor) return false;
+      return true;
+    });
     const suiteMap = new Map<string, Room[]>();
     
     filteredRooms.forEach(room => {
-      const currentRooms = suiteMap.get(room.suiteId) || [];
-      suiteMap.set(room.suiteId, [...currentRooms, room]);
+      if (room.suiteId == null || room.suiteId === '') return;
+      const currentRooms = suiteMap.get(String(room.suiteId)) || [];
+      suiteMap.set(String(room.suiteId), [...currentRooms, room]);
     });
 
-    return Array.from(suiteMap.entries()).map(([id, rooms]) => ({
+    return Array.from(suiteMap.entries()).map(([id, suiteRooms]) => ({
       id,
       number: id,
-      building: rooms[0].building,
-      rooms: rooms.sort((a, b) => (a.letter || '').localeCompare(b.letter || ''))
+      building: suiteRooms[0].building,
+      rooms: suiteRooms.sort((a, b) => (a.letter || '').localeCompare(b.letter || ''))
     }));
   },
 
@@ -740,8 +796,9 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   importStudents: async (previewData, studentSelections = {}) => {
-    if(previewData.length === 0) return;
+    if (previewData.length === 0) return;
     set({ isLoading: true, err: null });
+    let apiErrorToasted = false;
     try {
       const response = await fetchWithAuth(`${API_URL}/students/import`, {
         method: 'POST',
@@ -755,14 +812,19 @@ export const useStore = create<Store>((set, get) => ({
       }, get, set);
       const data = await response.json();
       if (!response.ok) {
-        toast.error(data.message);
-        throw new Error('Failed to import students');
+        apiErrorToasted = true;
+        toast.error(data?.message || 'Failed to import students');
+        throw new Error(data?.message || 'Failed to import students');
       }
       const newRooms: Room[] | undefined = await get().fetchRooms();
-      set({ rooms: newRooms });
+      set({ rooms: newRooms, isLoading: false });
+      return data;
     } catch (error) {
       set({ isLoading: false });
-      toast.error('Error importing students');
+      if (!apiErrorToasted) {
+        toast.error('Error importing students');
+      }
+      throw error;
     }
   },
 

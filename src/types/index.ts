@@ -1,6 +1,7 @@
 export interface Student {
   id: string;
   name: string;
+  lastname?: string | null;
   studentUid?: string | null;
   isPresent: boolean | null | 1 | 0;
   inRoom: boolean |  null | 1 | 0;
@@ -19,14 +20,37 @@ export interface PreviewData {
 
 export interface Room {
   id: string;
-  letter: 'A' | 'B' | 'C' | 'D';
-  suiteNumber: number;
-  suiteId: string; // Suite ID
+  letter: 'A' | 'B' | 'C' | 'D' | string | null;
+  suiteNumber: number | null;
+  suiteId: string | null;
+  roomNumber?: number | string | null;
+  layoutType?: 'suite' | 'shared_bath' | 'standalone' | string;
   building: string;
   buildingId?: number;
   isClean?: boolean | null | 0 | 1;
   isCleanCheckDay?: boolean | null | 0 | 1;
   students: Student[];
+}
+
+/** Display label: suite rooms → "201 A"; standalone → "101" */
+export function formatRoomLabel(room: Pick<Room, 'letter' | 'suiteNumber' | 'roomNumber'>): string {
+  if (room.letter) {
+    const suite = room.suiteNumber != null ? String(room.suiteNumber) : '';
+    return suite ? `${suite} ${room.letter}` : String(room.letter);
+  }
+  if (room.roomNumber != null && room.roomNumber !== '') return String(room.roomNumber);
+  if (room.suiteNumber != null) return String(room.suiteNumber);
+  return '—';
+}
+
+/** Infer floor from room number / suite number (101 → 1, 1205 → 12). */
+export function floorFromRoom(room: Pick<Room, 'letter' | 'suiteNumber' | 'roomNumber'>): number {
+  const raw = room.roomNumber ?? room.suiteNumber;
+  if (raw === null || raw === undefined || raw === '') return 1;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw).replace(/\D/g, ''), 10);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  if (n < 100) return 1;
+  return Math.floor(n / 100) || 1;
 }
 
 /** 0=Sunday .. 6=Saturday (same as Date.getDay()) */
@@ -44,6 +68,7 @@ export interface Building {
   name: string;
   code: string;
   layout_type: 'suite' | 'shared_bath' | 'standalone';
+  floors?: number;
   suite_count?: number;
   room_count?: number;
 }
@@ -80,6 +105,7 @@ export interface AttendanceReportStudent {
 export interface AttendanceReportDailyBreakdown {
   date: string;
   present: number;
+  inRoom: number;
   absent: number;
   pending: number;
   total: number;
@@ -90,6 +116,7 @@ export interface AttendanceReportSummary {
   totalStudents: number;
   totalCheckIns: number;
   presentCount: number;
+  inRoomCount: number;
   absentCount: number;
   pendingCount: number;
   attendanceRate: number;
@@ -103,6 +130,52 @@ export interface AttendanceReport {
   summary: AttendanceReportSummary;
   dailyBreakdown: AttendanceReportDailyBreakdown[];
   students: AttendanceReportStudent[];
+}
+
+export type ReportsTabFilter = "all" | "attendance" | "cleanCheck"
+
+export interface CleanCheckReportRecord {
+  date: string;
+  isClean: boolean | null;
+  checkedBy: string | null;
+  checkedAt: string | null;
+  applicable: boolean;
+}
+
+export interface CleanCheckReportRoom {
+  id: number;
+  room: string;
+  building: string;
+  records: CleanCheckReportRecord[];
+}
+
+export interface CleanCheckReportDailyBreakdown {
+  date: string;
+  clean: number;
+  dirty: number;
+  pending: number;
+  total: number;
+  rate: number;
+}
+
+export interface CleanCheckReportSummary {
+  totalRooms: number;
+  cleanCheckDays: number;
+  totalChecks: number;
+  cleanCount: number;
+  dirtyCount: number;
+  pendingCount: number;
+  cleanRate: number;
+}
+
+export interface CleanCheckReport {
+  buildingId: number | null;
+  buildingName: string | null;
+  startDate: string;
+  endDate: string;
+  summary: CleanCheckReportSummary;
+  dailyBreakdown: CleanCheckReportDailyBreakdown[];
+  rooms: CleanCheckReportRoom[];
 }
 
 export type Language = 'es' | 'en' | 'fr';
@@ -119,6 +192,7 @@ export interface Translation {
   backToSuites: string;
   totalRooms: string;
   present: string;
+  inRoom: string;
   absent: string;
   pending: string;
   building: string;
@@ -213,10 +287,12 @@ export interface Translation {
     tableRoom: string;
     tableBuilding: string;
     tablePresentDays: string;
+    tableInRoomDays: string;
     tableAbsentDays: string;
     tablePendingDays: string;
     tableAttendanceRate: string;
     statusPresent: string;
+    statusInRoom: string;
     statusAbsent: string;
     statusPending: string;
     empty: string;
@@ -227,8 +303,36 @@ export interface Translation {
     sheetSummary: string;
     sheetDaily: string;
     excelStatusPresent: string;
+    excelStatusInRoom: string;
     excelStatusAbsent: string;
     excelStatusPending: string;
+    tabAll: string;
+    tabAttendance: string;
+    tabCleanCheck: string;
+    kpiTotalRooms: string;
+    kpiRoomsOccupiedHint: string;
+    kpiCleanRate: string;
+    kpiCleanChecks: string;
+    kpiNotClean: string;
+    kpiCleanPending: string;
+    filterToday: string;
+    filterWeek: string;
+    cleanDailyTrendTitle: string;
+    cleanDailyTrendSubtitle: string;
+    cleanRoomDetailTitle: string;
+    cleanRoomDetailSubtitleDaily: string;
+    cleanRoomDetailSubtitleSummary: string;
+    tableCleanDays: string;
+    tableDirtyDays: string;
+    statusClean: string;
+    statusDirty: string;
+    notCleanCheckDay: string;
+    statusCleanPending: string;
+    cleanEmpty: string;
+    excelStatusClean: string;
+    excelStatusDirty: string;
+    sheetCleanSummary: string;
+    sheetCleanDaily: string;
   };
   auth: {
     signIn: string;
@@ -250,6 +354,29 @@ export interface Translation {
     error: string;
     columnError: string;
     ignoredRecord: string;
+    noRowsToImport: string;
+    sheetMissing: string;
+    noValidRows: string;
+    fixBeforeImport: string;
+    errorsFound: string;
+    removeErrorRow: string;
+    removeAllErrorRows: string;
+    errorRowsRemoved: string;
+    allErrorRowsRemoved: string;
+    rowErrors: {
+      nameRequired: string;
+      lastnameRequired: string;
+      buildingRequired: string;
+      buildingNotFound: string;
+      suiteRequired: string;
+      roomNumberRequired: string;
+      suiteInvalid: string;
+      roomLetterInvalid: string;
+      roomNotFound: string;
+      suiteRoomNotFound: string;
+      duplicateIdInFile: string;
+      roomCapacity: string;
+    };
     confirm: {
       title: string;
       description: string;
@@ -260,6 +387,7 @@ export interface Translation {
       description: string;
       sheets: string;
       name: string;
+      lastname: string;
       id: string;
       room: string;
       suite: string;
@@ -279,6 +407,7 @@ export interface Translation {
       legend: {
         redLabel: string;
         yellowLabel: string;
+        errorLabel: string;
       };
     };
     template: {

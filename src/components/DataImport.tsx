@@ -184,12 +184,13 @@ function DataImport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewData, selectedSheet]);
 
-  // Re-validate when room catalog finishes loading (keep current radio selections).
+  // Re-validate when room catalog finishes loading; backfill defaults if selections missing.
   useEffect(() => {
     if (previewData.length > 0 && selectedSheet) {
       const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
       if (selectedPreview) {
-        checkForMatches(selectedPreview.allRows, false);
+        const hasSelections = Object.keys(studentSelectionsRef.current).length > 0;
+        checkForMatches(selectedPreview.allRows, !hasSelections);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,6 +313,29 @@ function DataImport() {
     [getBuildingLayout]
   );
 
+  const formatRoomLocation = useCallback((room: (typeof rooms)[number]) => {
+    const building = String(room.building || "").trim();
+    if (room.suiteNumber != null && room.letter) {
+      return `${building} ${room.suiteNumber}${String(room.letter).toUpperCase()}`;
+    }
+    return `${building} ${room.roomNumber ?? ""}`.trim();
+  }, []);
+
+  const findResidentByUid = useCallback(
+    (uid: string) => {
+      const needle = uid.trim().toLowerCase();
+      if (!needle) return null;
+      for (const room of rooms) {
+        const student = (room.students || []).find(
+          (s) => s.studentUid != null && String(s.studentUid).trim().toLowerCase() === needle
+        );
+        if (student) return { room, student };
+      }
+      return null;
+    },
+    [rooms]
+  );
+
   const validateRows = useCallback(
     (data: any[], nameMatches: any[], selections: Record<string, string>) => {
       const errors: Record<number, string> = {};
@@ -333,6 +357,10 @@ function DataImport() {
         }
         if (!row.Lastname) {
           errors[index] = t.import.rowErrors.lastnameRequired;
+          return;
+        }
+        if (!row.ID || !String(row.ID).trim()) {
+          errors[index] = t.import.rowErrors.idRequired;
           return;
         }
         if (!buildingLower) {
@@ -378,15 +406,25 @@ function DataImport() {
           return;
         }
 
-        if (row.ID) {
-          const uid = String(row.ID);
-          if (uidFirstIndex.has(uid)) {
-            errors[index] = t.import.rowErrors.duplicateIdInFile
-              .replace("{id}", uid)
-              .replace("{row}", String((uidFirstIndex.get(uid) ?? 0) + 1));
-            return;
-          }
-          uidFirstIndex.set(uid, index);
+        const uid = String(row.ID).trim();
+        if (uidFirstIndex.has(uid)) {
+          errors[index] = t.import.rowErrors.duplicateIdInFile
+            .replace("{id}", uid)
+            .replace("{row}", String((uidFirstIndex.get(uid) ?? 0) + 1));
+          return;
+        }
+        uidFirstIndex.set(uid, index);
+
+        const uidOwner = findResidentByUid(uid);
+        if (uidOwner && Number(uidOwner.room.id) !== Number(storeRoom.id)) {
+          const ownerName = [uidOwner.student.name, uidOwner.student.lastname]
+            .filter(Boolean)
+            .join(" ");
+          errors[index] = t.import.rowErrors.idInOtherRoom
+            .replace("{id}", uid)
+            .replace("{name}", ownerName || "another resident")
+            .replace("{location}", formatRoomLocation(uidOwner.room));
+          return;
         }
 
         if (isYellowNameMatch(row, nameMatches)) return;
@@ -398,7 +436,7 @@ function DataImport() {
         }
 
         const selection = selections[`${key}-${index}`];
-        const isOverwrite = selection && selection !== "-1";
+        const isOverwrite = selection != null && String(selection) !== "-1" && String(selection) !== "";
         if (!isOverwrite) {
           const next = (projectedOccupancy.get(key) || 0) + 1;
           projectedOccupancy.set(key, next);
@@ -411,7 +449,14 @@ function DataImport() {
 
       return errors;
     },
-    [findStoreRoom, getBuildingLayout, isYellowNameMatch, t.import.rowErrors]
+    [
+      findStoreRoom,
+      findResidentByUid,
+      formatRoomLocation,
+      getBuildingLayout,
+      isYellowNameMatch,
+      t.import.rowErrors,
+    ]
   );
 
   const checkForMatches = (data: any[], resetSelections: boolean) => {
@@ -490,12 +535,16 @@ function DataImport() {
         const occupants = (storeRoom?.students || []).filter((s) => s.id != null);
         if (!occupants.length) return;
 
-        indexes.forEach((rowIndex, slot) => {
-          if (occupants.length === 1) {
-            initialSelections[`${roomKey}-${rowIndex}`] = slot === 0 ? "-1" : occupants[0].id;
+        // Each import row defaults to empty when the room has any free capacity.
+        // Do NOT auto-assign later rows to "replace" — capacity validation will flag
+        // overfill and the user can choose a replacement explicitly.
+        const hasEmptySlot = occupants.length < MAX_STUDENTS_PER_ROOM;
+        indexes.forEach((rowIndex, i) => {
+          if (hasEmptySlot) {
+            initialSelections[`${roomKey}-${rowIndex}`] = "-1";
           } else {
-            initialSelections[`${roomKey}-${rowIndex}`] =
-              occupants[Math.min(slot, occupants.length - 1)].id;
+            const occupant = occupants[Math.min(i, occupants.length - 1)];
+            initialSelections[`${roomKey}-${rowIndex}`] = String(occupant.id);
           }
         });
       });
@@ -504,6 +553,51 @@ function DataImport() {
       studentSelectionsRef.current = initialSelections;
       setExpandedRows(initialExpandedRows);
       selectionsForValidation = initialSelections;
+    } else {
+      // Backfill missing choices (e.g. rooms loaded after Excel parse) — still prefer empty.
+      const nextSelections = { ...studentSelectionsRef.current };
+      let changed = false;
+
+      const byRoom = new Map<string, number[]>();
+      data.forEach((row, index) => {
+        if (!roomMatches.includes(row)) return;
+        if (isYellowNameMatch(row, nameMatches)) return;
+        const key = roomKeyForRow(row);
+        if (!byRoom.has(key)) byRoom.set(key, []);
+        byRoom.get(key)!.push(index);
+      });
+
+      byRoom.forEach((indexes, roomKey) => {
+        const sample = data[indexes[0]];
+        const sampleBuilding = String(sample.Building || "").toLowerCase();
+        const sampleStandalone = getBuildingLayout(sampleBuilding) === "standalone";
+        const storeRoom = findStoreRoom(
+          sampleBuilding,
+          sampleStandalone ? standaloneRoomNumber(sample) : normalizeSuite(sample.Suite),
+          sampleStandalone ? "" : normalizeLetter(sample.Room)
+        );
+        const occupants = (storeRoom?.students || []).filter((s) => s.id != null);
+        if (!occupants.length) return;
+
+        const hasEmptySlot = occupants.length < MAX_STUDENTS_PER_ROOM;
+        indexes.forEach((rowIndex, i) => {
+          const selKey = `${roomKey}-${rowIndex}`;
+          if (nextSelections[selKey] != null && nextSelections[selKey] !== "") return;
+          if (hasEmptySlot) {
+            nextSelections[selKey] = "-1";
+          } else {
+            const occupant = occupants[Math.min(i, occupants.length - 1)];
+            nextSelections[selKey] = String(occupant.id);
+          }
+          changed = true;
+        });
+      });
+
+      if (changed) {
+        setStudentSelections(nextSelections);
+        studentSelectionsRef.current = nextSelections;
+        selectionsForValidation = nextSelections;
+      }
     }
 
     setRowErrors(validateRows(data, nameMatches, selectionsForValidation));
@@ -584,37 +678,38 @@ function DataImport() {
 
   const handleStudentSelection = useCallback(
     (roomKey: string, studentId: string, rowIndex: number) => {
-      const [building, suite, room] = roomKey.split("-");
-      const studentsInRoom = getStudentsForRoom(building, suite, room ?? "");
-      if (studentsInRoom.length === 1) {
-        studentsInRoom.push({
-          id: "-1",
-          name: "Empty slot",
-          isPresent: null,
-          inRoom: null,
-        });
-      }
-      const otherStudentId: any = studentsInRoom.find(
-        (student) => student.id !== studentId
-      )?.id;
+      const selectedId = String(studentId);
+      const selectionKey = `${roomKey}-${rowIndex}`;
+      const newSelections = { ...studentSelections, [selectionKey]: selectedId };
 
-      const newSelections = { ...studentSelections };
-      const exitingKeyRoom = Object.keys(newSelections).filter((key) =>
-        key.startsWith(`${roomKey}`)
-      );
-      if (exitingKeyRoom.length === 2) {
-        exitingKeyRoom.forEach((key) => {
-          if (key.endsWith(rowIndex.toString())) {
-            newSelections[key] = studentId;
-          } else {
-            newSelections[key] = otherStudentId;
+      const [building, suiteOrRoom = "", letter = ""] = roomKey.split("-");
+      const occupants = getStudentsForRoom(building, suiteOrRoom, letter)
+        .map((s) => String(s.id))
+        .filter(Boolean);
+      const hasEmptySlot = occupants.length < MAX_STUDENTS_PER_ROOM;
+
+      // If another import row in the same room already targets this occupant,
+      // move that other row to a free occupant (or empty if available) — never
+      // force "-1" on a full room (that falsely triggers capacity errors).
+      if (selectedId !== "-1") {
+        Object.keys(newSelections).forEach((key) => {
+          if (key === selectionKey || !key.startsWith(`${roomKey}-`)) return;
+          if (String(newSelections[key]) !== selectedId) return;
+
+          const taken = new Set(
+            Object.entries(newSelections)
+              .filter(([k]) => k.startsWith(`${roomKey}-`) && k !== key)
+              .map(([, v]) => String(v))
+          );
+          const alternative = occupants.find((id) => !taken.has(id));
+          if (alternative) {
+            newSelections[key] = alternative;
+          } else if (hasEmptySlot) {
+            newSelections[key] = "-1";
           }
         });
-      } else if (exitingKeyRoom[0]) {
-        newSelections[exitingKeyRoom[0]] = studentId;
-      } else {
-        newSelections[`${roomKey}-${rowIndex}`] = studentId;
       }
+
       setStudentSelections(newSelections);
 
       const selectedPreview = previewData.find((p) => p.sheet === selectedSheet);
@@ -694,6 +789,43 @@ function DataImport() {
       );
     }
   }, [previewData, selectedSheet, rowErrors, applyPreviewRows, t.import.errorRowsRemoved]);
+
+  const isRedConflictRow = useCallback(
+    (row: any, rowIndex: number) => {
+      if (rowErrors[rowIndex]) return false;
+      if (isYellowNameMatch(row, matchingNames)) return false;
+      return matchingStudents.includes(row);
+    },
+    [rowErrors, matchingNames, matchingStudents, isYellowNameMatch]
+  );
+
+  const redConflictIndexes = useCallback(() => {
+    const selected = previewData.find((p) => p.sheet === selectedSheet);
+    if (!selected) return [] as number[];
+    return selected.allRows
+      .map((row, index) => (isRedConflictRow(row, index) ? index : -1))
+      .filter((index) => index >= 0);
+  }, [previewData, selectedSheet, isRedConflictRow]);
+
+  const removeAllRedRows = useCallback(() => {
+    const selected = previewData.find((p) => p.sheet === selectedSheet);
+    if (!selected) return;
+    const redIndexes = new Set(redConflictIndexes());
+    if (redIndexes.size === 0) return;
+    const nextAllRows = selected.allRows.filter((_, index) => !redIndexes.has(index));
+    applyPreviewRows(nextAllRows);
+    if (nextAllRows.length > 0) {
+      toast.success(
+        t.import.redRowsRemoved.replace("{count}", String(redIndexes.size))
+      );
+    }
+  }, [
+    previewData,
+    selectedSheet,
+    redConflictIndexes,
+    applyPreviewRows,
+    t.import.redRowsRemoved,
+  ]);
 
   const getTemplateExcel = useCallback(async () => {
     try {
@@ -783,6 +915,9 @@ function DataImport() {
   const hasMoreRows = selectedPreview
     ? selectedPreview.rows.length < selectedPreview.allRows.length
     : false;
+  const redConflictCount = selectedPreview
+    ? selectedPreview.allRows.filter((row, index) => isRedConflictRow(row, index)).length
+    : 0;
 
   if (isLoading) {
     return (
@@ -950,6 +1085,21 @@ function DataImport() {
                     </button>
                   </div>
                 )}
+                {redConflictCount > 0 && (
+                  <div className="rounded-xl border border-red-300 bg-red-100/70 px-3 py-2 text-sm text-red-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span>
+                      {t.import.redConflictsFound.replace("{count}", String(redConflictCount))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeAllRedRows}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-red-300 text-red-800 hover:bg-red-200/80 text-xs font-medium shrink-0"
+                    >
+                      <Trash2 size={14} />
+                      {t.import.removeAllRedRows}
+                    </button>
+                  </div>
+                )}
                 <p className="text-sm text-slate-600 flex items-center">
                   <span className="inline-block w-3.5 h-3.5 rounded bg-red-300 mr-2"></span>
                   {t.import.dataPreview.legend.redLabel}
@@ -1016,46 +1166,62 @@ function DataImport() {
                       }
 
                       const roomKey = roomKeyForRow(row);
+                      const canResolveRoomConflict = isRoomMatching && !isNameMatching;
 
-                      const studentsInRoom =
-                        isRoomMatching && !isNameMatching && !rowError
-                          ? getStudentsForRoom(buildingLower, suiteOrRoomStr, roomLetter)
-                          : [];
+                      const studentsInRoom = canResolveRoomConflict
+                        ? getStudentsForRoom(buildingLower, suiteOrRoomStr, roomLetter)
+                        : [];
                       return (
                         <>
                           <tr key={rowIndex} className={rowClass} title={rowError || undefined}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                              {rowError ? (
-                                <div className="flex items-center gap-2 max-w-[18rem]">
-                                  <span className="inline-flex items-center gap-1 text-orange-700 text-xs font-medium min-w-0">
-                                    <AlertCircle size={14} className="shrink-0" />
-                                    <span className="truncate">{rowError}</span>
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removePreviewRow(rowIndex)}
-                                    className="shrink-0 inline-flex items-center justify-center p-1.5 rounded-lg text-orange-700 hover:bg-orange-200/80 transition-colors"
-                                    title={t.import.removeErrorRow}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              ) : (
-                                isRoomMatching && studentsInRoom.length > 0 && (
-                                  <button
-                                    onClick={() => toggleExpandedRow(roomKey)}
-                                    className="flex items-center justify-center gap-0.5 p-1.5 bg-brand-100 rounded-full hover:bg-brand-200 transition-colors"
-                                    title="Current students in this room"
-                                  >
-                                    <UserIcon size={16} className="text-brand-600" />
-                                    {expandedRows[roomKey] ? (
-                                      <ChevronUp size={16} className="text-brand-600 transition-transform" />
-                                    ) : (
-                                      <ChevronDown size={16} className="text-brand-600 transition-transform" />
+                              <div className="flex flex-col gap-1.5 max-w-[20rem]">
+                                {rowError && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 text-orange-700 text-xs font-medium min-w-0">
+                                      <AlertCircle size={14} className="shrink-0" />
+                                      <span className="truncate">{rowError}</span>
+                                    </span>
+                                    {!canResolveRoomConflict && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removePreviewRow(rowIndex)}
+                                        className="shrink-0 inline-flex items-center justify-center p-1.5 rounded-lg text-orange-700 hover:bg-orange-200/80 transition-colors"
+                                        title={t.import.removeErrorRow}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
                                     )}
-                                  </button>
-                                )
-                              )}
+                                  </div>
+                                )}
+                                {canResolveRoomConflict ? (
+                                  <div className="flex items-center gap-1.5">
+                                    {studentsInRoom.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleExpandedRow(roomKey)}
+                                        className="flex items-center justify-center gap-0.5 p-1.5 bg-brand-100 rounded-full hover:bg-brand-200 transition-colors"
+                                        title="Current students in this room"
+                                      >
+                                        <UserIcon size={16} className="text-brand-600" />
+                                        {expandedRows[roomKey] ? (
+                                          <ChevronUp size={16} className="text-brand-600 transition-transform" />
+                                        ) : (
+                                          <ChevronDown size={16} className="text-brand-600 transition-transform" />
+                                        )}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => removePreviewRow(rowIndex)}
+                                      className="shrink-0 inline-flex items-center justify-center p-1.5 rounded-lg text-red-700 hover:bg-red-200/80 transition-colors"
+                                      title={rowError ? t.import.removeErrorRow : t.import.removeRedRow}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                             </td>
                             {selectedPreview.headers.map((header, colIndex) => {
                               let displayValue = row[header]?.toString() || "";
@@ -1080,49 +1246,18 @@ function DataImport() {
                                     Current students in this room:
                                   </h4>
                                   <div className="space-y-2">
-                                    {studentsInRoom.map((student) => (
-                                      <div key={student.id} className="flex items-center gap-3">
-                                        <input
-                                          type="radio"
-                                          id={`student-${roomKey}-${student.id}-${rowIndex}`}
-                                          name={`room-${roomKey}-${rowIndex}`}
-                                          value={student.id}
-                                          onChange={() => {
-                                            handleStudentSelection(roomKey, student.id, rowIndex);
-                                          }}
-                                          checked={studentSelections[`${roomKey}-${rowIndex}`] === student.id}
-                                          className="h-4 w-4 text-brand-600 focus:ring-brand-500"
-                                        />
-                                        <label
-                                          htmlFor={`student-${roomKey}-${student.id}-${rowIndex}`}
-                                          className="text-sm text-slate-700 flex items-center gap-2"
-                                        >
-                                          <UserIcon size={16} className="text-slate-500" />
-                                          <span>
-                                            {[student.name, student.lastname].filter(Boolean).join(" ")}
-                                            {student.studentUid ? ` · ${student.studentUid}` : ""}
-                                          </span>
-                                          {studentSelections[`${roomKey}-${rowIndex}`] === student.id && (
-                                            <span className="badge bg-brand-100 text-brand-800">
-                                              Will be replaced
-                                            </span>
-                                          )}
-                                        </label>
-                                      </div>
-                                    ))}
-  
-                                    {/* Agregar opción de "Espacio disponible" si solo hay un estudiante en la sala */}
+                                    {/* Prefer empty slot first when the room still has capacity */}
                                     {studentsInRoom.length === 1 && (
                                       <div className="flex items-center gap-3">
                                         <input
                                           type="radio"
                                           id={`empty-slot-${roomKey}-${rowIndex}`}
                                           name={`room-${roomKey}-${rowIndex}`}
-                                          value={-1}
+                                          value="-1"
                                           onChange={() => {
                                             handleStudentSelection(roomKey, "-1", rowIndex);
                                           }}
-                                          checked={studentSelections[`${roomKey}-${rowIndex}`] === "-1"}
+                                          checked={String(studentSelections[`${roomKey}-${rowIndex}`] ?? "") === "-1"}
                                           className="h-4 w-4 text-brand-600 focus:ring-brand-500"
                                         />
                                         <label
@@ -1137,9 +1272,46 @@ function DataImport() {
                                         </label>
                                       </div>
                                     )}
+
+                                    {studentsInRoom.map((student) => {
+                                      const studentId = String(student.id);
+                                      const isSelected =
+                                        String(studentSelections[`${roomKey}-${rowIndex}`] ?? "") === studentId;
+                                      return (
+                                      <div key={studentId} className="flex items-center gap-3">
+                                        <input
+                                          type="radio"
+                                          id={`student-${roomKey}-${studentId}-${rowIndex}`}
+                                          name={`room-${roomKey}-${rowIndex}`}
+                                          value={studentId}
+                                          onChange={() => {
+                                            handleStudentSelection(roomKey, studentId, rowIndex);
+                                          }}
+                                          checked={isSelected}
+                                          className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+                                        />
+                                        <label
+                                          htmlFor={`student-${roomKey}-${studentId}-${rowIndex}`}
+                                          className="text-sm text-slate-700 flex items-center gap-2"
+                                        >
+                                          <UserIcon size={16} className="text-slate-500" />
+                                          <span>
+                                            {[student.name, student.lastname].filter(Boolean).join(" ")}
+                                            {student.studentUid ? ` · ${student.studentUid}` : ""}
+                                          </span>
+                                          {isSelected && (
+                                            <span className="badge bg-brand-100 text-brand-800">
+                                              Will be replaced
+                                            </span>
+                                          )}
+                                        </label>
+                                      </div>
+                                    )})}
                                   </div>
                                   <p className="text-xs text-slate-500 mt-2">
-                                    Select the student that will be replaced by the new import data.
+                                    {studentsInRoom.length === 1
+                                      ? "Empty slot is selected by default. Choose a student only if you want to replace them."
+                                      : "Select the student that will be replaced by the new import data."}
                                   </p>
                                 </div>
                               </td>

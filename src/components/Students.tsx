@@ -165,8 +165,8 @@ function Students() {
     selectedCreateRoom != null && Number(selectedCreateRoom.student_count || 0) >= MAX_RESIDENTS_PER_ROOM;
 
   const handleCreateResident = async () => {
-    if (!createName.trim() || !createLastname.trim() || !createRoomId) {
-      toast.error('Name, last name, and room are required');
+    if (!createName.trim() || !createLastname.trim() || !createUid.trim() || !createRoomId) {
+      toast.error('Name, last name, resident ID, and room are required');
       return;
     }
     if (selectedRoomIsFull) {
@@ -185,7 +185,7 @@ function Students() {
           name: createName.trim(),
           lastname: createLastname.trim(),
           roomId: createRoomId,
-          studentUid: createUid.trim() || null,
+          studentUid: createUid.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -677,7 +677,8 @@ function Students() {
                 value={createUid}
                 onChange={(e) => setCreateUid(e.target.value)}
                 className="input text-sm"
-                placeholder="Optional institutional ID"
+                placeholder="Required institutional ID"
+                required
               />
             </div>
 
@@ -754,6 +755,7 @@ function Students() {
                   creating ||
                   !createName.trim() ||
                   !createLastname.trim() ||
+                  !createUid.trim() ||
                   !createRoomId ||
                   selectedRoomIsFull
                 }

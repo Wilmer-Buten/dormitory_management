@@ -68,7 +68,7 @@ interface Store {
   getSuites: () => Suite[];
   getDefaultViewMode: () => 'rooms' | 'suites';
   canSelectSuiteView: () => boolean;
-  addStudent: (roomId: string, studentName: string, studentLastname: string, studentUid?: string) => Promise<void>;
+  addStudent: (roomId: string, studentName: string, studentLastname: string, studentUid: string) => Promise<void>;
   getStats: () => {
     totalRooms: number;
     presentCount: number;
@@ -584,12 +584,17 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  addStudent: async (roomId: string, studentName: string, studentLastname: string, studentUid?: string) => {
+  addStudent: async (roomId: string, studentName: string, studentLastname: string, studentUid: string) => {
     const currentUser = get().currentUser;
     if (!currentUser) return;
     // set({ isLoading: true });
     toast.loading(get().getTranslation().students.addingStudent + '...', { id: 'add-student' });
     try {
+      const trimmedUid = String(studentUid || '').trim();
+      if (!trimmedUid) {
+        toast.error('Resident ID is required', { id: 'add-student' });
+        return;
+      }
       const response = await fetchWithAuth(`${API_URL}/students/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -597,7 +602,7 @@ export const useStore = create<Store>((set, get) => ({
           name: studentName,
           lastname: studentLastname,
           roomId,
-          studentUid: studentUid || null
+          studentUid: trimmedUid
         })
       }, get, set);
       const data = await response.json();

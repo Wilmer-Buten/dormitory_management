@@ -182,6 +182,10 @@ export const translations = {
       removeAllErrorRows: 'Remove all error rows',
       errorRowsRemoved: 'Removed {count} error row(s) from preview',
       allErrorRowsRemoved: 'All rows were removed from preview',
+      redConflictsFound: '{count} row(s) match occupied rooms (action required, or remove them).',
+      removeRedRow: 'Remove this room-conflict row from preview',
+      removeAllRedRows: 'Remove all red rows',
+      redRowsRemoved: 'Removed {count} red row(s) from preview',
       rowErrors: {
         nameRequired: 'Name is required',
         lastnameRequired: 'Lastname is required',
@@ -193,7 +197,9 @@ export const translations = {
         roomLetterInvalid: 'Room must be a single letter A–D',
         roomNotFound: 'Room {room} does not exist in {building}',
         suiteRoomNotFound: 'Room {suite}{room} does not exist in {building}',
+        idRequired: 'Resident ID is required',
         duplicateIdInFile: 'Duplicate ID "{id}" (also on row {row})',
+        idInOtherRoom: 'ID "{id}" already assigned to {name} in {location}',
         roomCapacity: 'Would exceed room capacity (max {max})',
       },
       confirm: {
@@ -207,7 +213,7 @@ export const translations = {
         sheets: 'Required Columns: ',
         name: 'Name (Ex: Paul)',
         lastname: 'Lastname (Ex: Smith)',
-        id: 'ID (Ex: 12345678) — optional',
+        id: 'ID (Ex: 12345678) — required',
         room: 'Room (Ex: A for suites, or 101 for standalone like Peterson)',
         suite: 'Suite (Ex: 101) — leave blank for standalone buildings',
         building: 'Building (Ex: Edwards, Peterson)'
@@ -226,7 +232,7 @@ export const translations = {
         legend: {
           redLabel: 'red records indicate matches with existing room data (action required).',
           yellowLabel: 'yellow records indicate matches with existing resident names (will be ignored).',
-          errorLabel: 'orange records have validation errors (building/room missing, capacity, etc.).'
+          errorLabel: 'orange records have validation errors (missing ID, building/room, ID already in another room, capacity, etc.).'
         }
       },
       template: {
@@ -474,6 +480,10 @@ export const translations = {
       removeAllErrorRows: 'Quitar todas las filas con error',
       errorRowsRemoved: 'Se quitaron {count} fila(s) con error del preview',
       allErrorRowsRemoved: 'Se quitaron todas las filas del preview',
+      redConflictsFound: '{count} fila(s) coinciden con habitaciones ocupadas (requieren acción, o quítalas).',
+      removeRedRow: 'Quitar esta fila de conflicto del preview',
+      removeAllRedRows: 'Quitar todas las filas rojas',
+      redRowsRemoved: 'Se quitaron {count} fila(s) roja(s) del preview',
       rowErrors: {
         nameRequired: 'El nombre es requerido',
         lastnameRequired: 'El apellido es requerido',
@@ -485,7 +495,9 @@ export const translations = {
         roomLetterInvalid: 'La habitación debe ser una letra A–D',
         roomNotFound: 'La habitación {room} no existe en {building}',
         suiteRoomNotFound: 'La habitación {suite}{room} no existe en {building}',
+        idRequired: 'El ID institucional es requerido',
         duplicateIdInFile: 'ID duplicado "{id}" (también en fila {row})',
+        idInOtherRoom: 'El ID "{id}" ya está asignado a {name} en {location}',
         roomCapacity: 'Excedería la capacidad de la habitación (máx. {max})',
       },
       confirm: {
@@ -499,7 +511,7 @@ export const translations = {
         sheets: 'Columnas Requeridas: ',
         name: 'Nombre (Ex: Paul)',
         lastname: 'Apellido (Ex: Smith)',
-        id: 'ID (Ex: 12345678) — opcional',
+        id: 'ID (Ex: 12345678) — requerido',
         room: 'Habitación (Ex: A en suites, o 101 en standalone como Peterson)',
         suite: 'Suite (Ex: 101) — vacío en edificios standalone',
         building: 'Edificio (Ex: Edwards, Peterson)'
@@ -518,7 +530,7 @@ export const translations = {
         legend: {
           redLabel: 'los registros rojos indican que se encontraron coincidencias en las habitaciones (acción requerida)',
           yellowLabel: 'los registros amarillos indican que se encontraron coincidencias en las habitaciones con los mismos residentes (¡se ignorarán!)',
-          errorLabel: 'los registros naranjas tienen errores de validación (edificio/habitación inexistente, capacidad, etc.)'
+          errorLabel: 'los registros naranjas tienen errores de validación (falta ID, edificio/habitación, ID en otra habitación, capacidad, etc.)'
         }
       },
       template: {
@@ -766,6 +778,10 @@ export const translations = {
       removeAllErrorRows: 'Retirer toutes les lignes en erreur',
       errorRowsRemoved: '{count} ligne(s) en erreur retirée(s) de l\'aperçu',
       allErrorRowsRemoved: 'Toutes les lignes ont été retirées de l\'aperçu',
+      redConflictsFound: '{count} ligne(s) correspondent à des chambres occupées (action requise, ou retirez-les).',
+      removeRedRow: 'Retirer cette ligne en conflit de l\'aperçu',
+      removeAllRedRows: 'Retirer toutes les lignes rouges',
+      redRowsRemoved: '{count} ligne(s) rouge(s) retirée(s) de l\'aperçu',
       rowErrors: {
         nameRequired: 'Le nom est requis',
         lastnameRequired: 'Le nom de famille est requis',
@@ -777,7 +793,9 @@ export const translations = {
         roomLetterInvalid: 'La chambre doit être une lettre A–D',
         roomNotFound: 'La chambre {room} n\'existe pas dans {building}',
         suiteRoomNotFound: 'La chambre {suite}{room} n\'existe pas dans {building}',
+        idRequired: 'L\'ID résident est requis',
         duplicateIdInFile: 'ID en double "{id}" (aussi à la ligne {row})',
+        idInOtherRoom: 'L\'ID "{id}" est déjà assigné à {name} dans {location}',
         roomCapacity: 'Dépasserait la capacité de la chambre (max {max})',
       },
       confirm: {
@@ -791,7 +809,7 @@ export const translations = {
         sheets: 'Colonnes Requises: ',
         name: 'Prénom (Ex: Paul)',
         lastname: 'Nom de famille (Ex: Smith)',
-        id: 'ID (Ex: 12345678) — optionnel',
+        id: 'ID (Ex: 12345678) — requis',
         room: 'Chambre (Ex: A pour suites, ou 101 pour standalone comme Peterson)',
         suite: 'Suite (Ex: 101) — vide pour les bâtiments standalone',
         building: 'Bâtiment (Ex: Edwards, Peterson)'
@@ -810,7 +828,7 @@ export const translations = {
         legend: {
           redLabel: 'les enregistrements rouges indiquent des correspondances avec les chambres existantes (action requise).',
           yellowLabel: 'les enregistrements jaunes indiquent des correspondances avec les noms des résidents existants (seront ignorés).',
-          errorLabel: 'les enregistrements orange ont des erreurs de validation (bâtiment/chambre manquant, capacité, etc.).'
+          errorLabel: 'les enregistrements orange ont des erreurs de validation (ID manquant, bâtiment/chambre, ID déjà dans une autre chambre, capacité, etc.).'
         }
     },
       template: {

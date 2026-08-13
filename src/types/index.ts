@@ -363,6 +363,10 @@ export interface Translation {
     removeAllErrorRows: string;
     errorRowsRemoved: string;
     allErrorRowsRemoved: string;
+    redConflictsFound: string;
+    removeRedRow: string;
+    removeAllRedRows: string;
+    redRowsRemoved: string;
     rowErrors: {
       nameRequired: string;
       lastnameRequired: string;
@@ -375,6 +379,8 @@ export interface Translation {
       roomNotFound: string;
       suiteRoomNotFound: string;
       duplicateIdInFile: string;
+      idRequired: string;
+      idInOtherRoom: string;
       roomCapacity: string;
     };
     confirm: {

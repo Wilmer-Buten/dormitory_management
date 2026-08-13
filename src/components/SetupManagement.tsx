@@ -726,7 +726,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
   };
 
   const handleAddRoomStudent = async () => {
-    if (!editRoom || !newStudentName.trim() || !newStudentLastname.trim()) return;
+    if (!editRoom || !newStudentName.trim() || !newStudentLastname.trim() || !newStudentUid.trim()) return;
     if (editRoomStudents.length >= 2) {
       toast.error('Room is full (maximum 2 residents)');
       return;
@@ -740,7 +740,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
           name: newStudentName.trim(),
           lastname: newStudentLastname.trim(),
           roomId: editRoom.room.id,
-          studentUid: newStudentUid.trim() || null,
+          studentUid: newStudentUid.trim(),
         }),
       });
       const data = await res.json();
@@ -769,7 +769,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
   };
 
   const handleSaveRoomStudent = async (studentId: number) => {
-    if (!editRoom || !editStudentName.trim() || !editStudentLastname.trim()) return;
+    if (!editRoom || !editStudentName.trim() || !editStudentLastname.trim() || !editStudentUid.trim()) return;
     setSaving(true);
     try {
       const res = await fetch(`${API}/students/${studentId}`, {
@@ -778,7 +778,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
         body: JSON.stringify({
           name: editStudentName.trim(),
           lastname: editStudentLastname.trim(),
-          studentUid: editStudentUid.trim() || null,
+          studentUid: editStudentUid.trim(),
         }),
       });
       const data = await res.json();
@@ -2197,7 +2197,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
                             value={editStudentUid}
                             onChange={e => setEditStudentUid(e.target.value)}
                             className="input text-sm"
-                            placeholder="Institutional ID (optional)"
+                            placeholder="Institutional ID (required)"
                           />
                           <div className="flex justify-end gap-1.5">
                             <button type="button" onClick={() => setEditingStudentId(null)} className="btn-secondary btn-sm text-xs">
@@ -2205,7 +2205,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
                             </button>
                             <button
                               type="button"
-                              disabled={saving || !editStudentName.trim() || !editStudentLastname.trim()}
+                              disabled={saving || !editStudentName.trim() || !editStudentLastname.trim() || !editStudentUid.trim()}
                               onClick={() => handleSaveRoomStudent(student.id)}
                               className="btn-primary btn-sm text-xs"
                             >
@@ -2277,7 +2277,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
                         onChange={e => setNewStudentUid(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleAddRoomStudent()}
                         className="input text-sm"
-                        placeholder="Institutional ID (optional)"
+                        placeholder="Institutional ID (required)"
                       />
                       <div className="flex justify-end gap-1.5">
                         <button
@@ -2289,7 +2289,7 @@ export default function SetupManagement({ defaultTab = 'buildings' }: { defaultT
                         </button>
                         <button
                           type="button"
-                          disabled={saving || !newStudentName.trim() || !newStudentLastname.trim()}
+                          disabled={saving || !newStudentName.trim() || !newStudentLastname.trim() || !newStudentUid.trim()}
                           onClick={handleAddRoomStudent}
                           className="btn-primary btn-sm text-xs"
                         >
